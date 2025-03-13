@@ -1,11 +1,14 @@
 package com.academico.espacos.repository;
 
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import com.academico.espacos.model.Reserva;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.stereotype.Repository;
+
+import com.academico.espacos.model.Reserva;
 
 public interface ReservaRepository extends JpaRepository<Reserva, Long> {
 
@@ -19,5 +22,6 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
         LocalTime horaFinal
     );
 	List<Reserva> findByEspacoAcademicoId(Long espacoAcademicoId);
+	 List<Reserva> findByProfessorId(Long professorId);
     
 }

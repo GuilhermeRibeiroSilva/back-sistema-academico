@@ -64,6 +64,10 @@ public class ReservaService {
     public Optional<Reserva> buscarPorId(Long id) {
         return repository.findById(id);
     }
+    
+    public List<Reserva> buscarReservasPorProfessor(Long professorId) {
+        return repository.findByProfessorId(professorId);
+    }
 
     public void cancelarReserva(Long id) {
         Reserva reserva = repository.findById(id)
