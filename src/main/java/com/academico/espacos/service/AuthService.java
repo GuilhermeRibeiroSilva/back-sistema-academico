@@ -89,40 +89,6 @@ public class AuthService {
         usuarioRepository.save(usuario);
     }
 
-    @Transactional
-    public void solicitarRecuperacaoSenha(String email) {
-        Usuario usuario = usuarioRepository.findByUsername(email)
-            .orElseThrow(() -> new AuthenticationException("Email não encontrado"));
-
-        String token = gerarTokenRecuperacao();
-        
-        RecuperacaoSenha recuperacao = new RecuperacaoSenha();
-        recuperacao.setToken(token);
-        recuperacao.setUsuario(usuario);
-        recuperacao.setExpiracao(LocalDateTime.now().plusHours(24));
-        
-        recuperacaoSenhaRepository.save(recuperacao);
-
-        enviarEmailRecuperacao(usuario.getUsername(), token);
-    }
-
-    @Transactional
-    public void recuperarSenha(String token, String novaSenha) {
-        RecuperacaoSenha recuperacao = recuperacaoSenhaRepository
-            .findByTokenAndUtilizadoFalse(token)
-            .orElseThrow(() -> new AuthenticationException("Token inválido ou já utilizado"));
-
-        if (recuperacao.getExpiracao().isBefore(LocalDateTime.now())) {
-            throw new AuthenticationException("Token expirado");
-        }
-
-        Usuario usuario = recuperacao.getUsuario();
-        usuario.setPassword(passwordEncoder.encode(novaSenha));
-        usuarioRepository.save(usuario);
-
-        recuperacao.setUtilizado(true);
-        recuperacaoSenhaRepository.save(recuperacao);
-    }
 
     @Transactional
     public void logout(String token) {
@@ -147,11 +113,6 @@ public class AuthService {
         }
     }
 
-    private String gerarTokenRecuperacao() {
-        byte[] randomBytes = new byte[32];
-        new SecureRandom().nextBytes(randomBytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
-    }
 
     private void enviarEmailRecuperacao(String email, String token) {
         String linkRecuperacao = "http://seu-site.com/recuperar-senha?token=" + token;

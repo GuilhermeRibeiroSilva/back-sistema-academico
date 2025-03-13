@@ -87,30 +87,6 @@ public class AuthController {
         }
     }
 
-    @PostMapping("/recuperar-senha/solicitar")
-    public ResponseEntity<?> solicitarRecuperacaoSenha(@RequestBody RecuperacaoSenhaRequest request) {
-        try {
-            authService.solicitarRecuperacaoSenha(request.getEmail());
-            return ResponseEntity.ok(new SuccessResponse("Email de recuperação enviado"));
-        } catch (AuthenticationException e) {
-            return ResponseEntity
-                .badRequest()
-                .body(new ErrorResponse(e.getMessage()));
-        }
-    }
-
-    @PostMapping("/recuperar-senha/confirmar")
-    public ResponseEntity<?> recuperarSenha(@RequestBody ConfirmarRecuperacaoRequest request) {
-        try {
-            authService.recuperarSenha(request.getToken(), request.getNovaSenha());
-            return ResponseEntity.ok(new SuccessResponse("Senha alterada com sucesso"));
-        } catch (AuthenticationException e) {
-            return ResponseEntity
-                .badRequest()
-                .body(new ErrorResponse(e.getMessage()));
-        }
-    }
-
     @PostMapping("/logout")
     public ResponseEntity<?> logout(@RequestHeader("Authorization") String token) {
         try {
