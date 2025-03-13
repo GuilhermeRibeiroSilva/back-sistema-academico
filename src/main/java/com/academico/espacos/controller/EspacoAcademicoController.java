@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.*;
 import com.academico.espacos.model.EspacoAcademico;
 import com.academico.espacos.service.EspacoAcademicoService;
 import java.util.List;
+import com.academico.espacos.dto.ErrorResponse;
 
 @RestController
 @RequestMapping("/api/espacos")
@@ -40,5 +41,15 @@ public class EspacoAcademicoController {
     public ResponseEntity<Void> tornarIndisponivel(@PathVariable Long id) {
         service.tornarIndisponivel(id);
         return ResponseEntity.ok().build();
+    }
+    
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> excluir(@PathVariable Long id) {
+        try {
+            service.excluir(id);
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
+        }
     }
 }

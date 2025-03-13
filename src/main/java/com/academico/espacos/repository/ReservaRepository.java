@@ -8,7 +8,7 @@ import java.time.LocalTime;
 import java.util.List;
 
 public interface ReservaRepository extends JpaRepository<Reserva, Long> {
-    
+
     @Query("SELECT r FROM Reserva r WHERE r.espacoAcademico.id = :espacoId " +
            "AND r.data = :data " +
            "AND ((r.horaInicial <= :horaFinal AND r.horaFinal >= :horaInicial))")
@@ -18,4 +18,6 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
         LocalTime horaInicial, 
         LocalTime horaFinal
     );
+	List<Reserva> findByEspacoAcademicoId(Long espacoAcademicoId);
+    
 }

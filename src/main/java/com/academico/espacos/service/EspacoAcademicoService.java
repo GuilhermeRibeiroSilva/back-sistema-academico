@@ -7,12 +7,19 @@ import com.academico.espacos.repository.EspacoAcademicoRepository;
 import com.academico.espacos.exception.ResourceNotFoundException;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.transaction.annotation.Transactional;
+import com.academico.espacos.model.Reserva;
+import com.academico.espacos.repository.ReservaRepository;
+
 
 @Service
 public class EspacoAcademicoService {
 
     @Autowired
     private EspacoAcademicoRepository repository;
+    
+    @Autowired
+    private ReservaRepository reservaRepository;
 
     public EspacoAcademico salvar(EspacoAcademico espacoAcademico) {
         if (espacoAcademico.getSigla() == null || espacoAcademico.getSigla().trim().isEmpty()) {
@@ -35,6 +42,19 @@ public class EspacoAcademicoService {
         }
         espacoAcademico.setId(id);
         return repository.save(espacoAcademico);
+    }
+    
+    @Transactional
+    public void excluir(Long id) {
+        EspacoAcademico espaco = repository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("Espaço Acadêmico não encontrado com id: " + id));
+        
+        List<Reserva> reservas = reservaRepository.findByEspacoAcademicoId(id);
+        if (!reservas.isEmpty()) {
+            throw new IllegalStateException("Não é possível excluir este espaço pois existem reservas associadas a ele");
+        }
+        
+        repository.delete(espaco);
     }
 
     public void tornarIndisponivel(Long id) {
