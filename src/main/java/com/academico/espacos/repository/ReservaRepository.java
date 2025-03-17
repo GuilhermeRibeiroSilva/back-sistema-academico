@@ -22,6 +22,10 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
 	        LocalTime horaInicial, 
 	        LocalTime horaFinal
 	    );
+	
+	@Query("SELECT r FROM Reserva r ORDER BY r.data ASC, r.horaInicial ASC")
+    List<Reserva> findAllOrderByDataAndHoraInicial();
+	List<Reserva> findByProfessorIdAndData(Long professorId, LocalDate data);
 	List<Reserva> findByEspacoAcademicoId(Long espacoAcademicoId);
 	 List<Reserva> findByProfessorId(Long professorId);
 	 boolean existsByIdAndUtilizadoTrue(Long id);
