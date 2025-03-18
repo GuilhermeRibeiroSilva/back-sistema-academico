@@ -155,10 +155,18 @@ public class ReservaService {
 	}
 
 	public void confirmarUtilizacao(Long id) {
-		Reserva reserva = repository.findById(id)
-				.orElseThrow(() -> new ResourceNotFoundException("Reserva não encontrada com id: " + id));
-		reserva.setUtilizado(true);
-		repository.save(reserva);
+	    Reserva reserva = repository.findById(id)
+	        .orElseThrow(() -> new ResourceNotFoundException("Reserva não encontrada"));
+	    
+	    // Add proper validation
+	    if (reserva.getStatus() == StatusReserva.UTILIZADO) {
+	        throw new IllegalStateException("Reserva já foi confirmada como utilizada");
+	    }
+	    
+	    // Update status
+	    reserva.setStatus(StatusReserva.UTILIZADO);
+	    reserva.setUtilizado(true);
+	    repository.save(reserva);
 	}
 
 	public List<Reserva> listarTodas() {

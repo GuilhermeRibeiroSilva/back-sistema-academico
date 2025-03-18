@@ -1,12 +1,14 @@
 package com.academico.espacos.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import com.academico.espacos.model.Reserva;
 import com.academico.espacos.service.ReservaService;
 import java.util.List;
 import com.academico.espacos.exception.ResourceNotFoundException;
+import com.academico.espacos.controller.AuthController.ErrorResponse;
 import com.academico.espacos.exception.ReservaConflitanteException;
 
 @RestController
@@ -70,15 +72,20 @@ public class ReservaController {
         }
     }
 
-    @PatchMapping("/{id}/confirmar-utilizacao")
-    public ResponseEntity<Void> confirmarUtilizacao(@PathVariable Long id) {
+    @PatchMapping("/{id}/confirmar")
+    public ResponseEntity<?> confirmarUtilizacao(@PathVariable Long id) {
         try {
             service.confirmarUtilizacao(id);
             return ResponseEntity.ok().build();
         } catch (ResourceNotFoundException e) {
             return ResponseEntity.notFound().build();
+        } catch (IllegalStateException e) {
+            return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().build();
+            // Log the exception for debugging
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ErrorResponse("Erro interno do servidor"));
         }
     }
 }
