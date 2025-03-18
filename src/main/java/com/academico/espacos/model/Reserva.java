@@ -28,6 +28,10 @@ public class Reserva {
     @Column(nullable = false)
     private LocalTime horaFinal;
     
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private StatusReserva status = StatusReserva.PENDENTE;
+    
     private boolean utilizado = false;
 
     // Getters e Setters
@@ -85,5 +89,19 @@ public class Reserva {
 
     public void setUtilizado(boolean utilizado) {
         this.utilizado = utilizado;
+    }
+    
+    public StatusReserva getStatus() {
+        return status;
+    }
+    
+    public void setStatus(StatusReserva status) {
+        this.status = status;
+    }
+    
+    public enum StatusReserva {
+        PENDENTE,
+        UTILIZADO,
+        CANCELADO
     }
 }
