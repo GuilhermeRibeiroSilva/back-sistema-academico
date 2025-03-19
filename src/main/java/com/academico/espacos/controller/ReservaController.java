@@ -6,6 +6,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import com.academico.espacos.model.Reserva;
 import com.academico.espacos.service.ReservaService;
+
+import java.time.LocalDate;
 import java.util.List;
 import com.academico.espacos.exception.ResourceNotFoundException;
 import com.academico.espacos.controller.AuthController.ErrorResponse;
@@ -19,15 +21,26 @@ public class ReservaController {
     private ReservaService service;
 
     @PostMapping
-    public ResponseEntity<Reserva> solicitar(@RequestBody Reserva reserva) {
+    public ResponseEntity<?> solicitar(@RequestBody Reserva reserva) {
         try {
-            return ResponseEntity.ok(service.solicitar(reserva));
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            return ResponseEntity.badRequest().build();
-        } catch (ReservaConflitanteException e) {
-            return ResponseEntity.status(409).build();
+            // Validações básicas
+            if (reserva.getData() == null || reserva.getHoraInicial() == null || 
+                reserva.getHoraFinal() == null || reserva.getEspacoAcademico() == null) {
+                return ResponseEntity.badRequest()
+                    .body(new ErrorResponse("Todos os campos são obrigatórios"));
+            }
+
+            // Validação de data passada
+            if (reserva.getData().isBefore(LocalDate.now())) {
+                return ResponseEntity.badRequest()
+                    .body(new ErrorResponse("Não é possível fazer reservas para datas passadas"));
+            }
+
+            Reserva novaReserva = service.solicitar(reserva);
+            return ResponseEntity.ok(novaReserva);
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().build();
+            return ResponseEntity.badRequest()
+                .body(new ErrorResponse(e.getMessage()));
         }
     }
     

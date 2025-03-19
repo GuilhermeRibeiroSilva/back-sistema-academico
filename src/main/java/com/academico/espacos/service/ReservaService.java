@@ -3,6 +3,7 @@ package com.academico.espacos.service;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional; 
 import com.academico.espacos.model.Reserva;
 import com.academico.espacos.model.Reserva.StatusReserva;
 import com.academico.espacos.model.EspacoAcademico;
@@ -136,23 +137,33 @@ public class ReservaService {
 		}
 	}
 
-	@Scheduled(fixedRate = 300000) // Executa a cada 5 minutos
-	public void atualizarStatusReservas() {
-		LocalDateTime agora = LocalDateTime.now();
-		List<Reserva> reservas = repository.findAll();
+	@Scheduled(fixedRate = 60000) // Executa a cada minuto
+    @Transactional
+    public void atualizarStatusReservas() {
+        LocalDateTime agora = LocalDateTime.now();
+        List<Reserva> reservas = repository.findAll();
 
-		for (Reserva reserva : reservas) {
-			LocalDateTime dataHoraInicial = LocalDateTime.of(reserva.getData(), reserva.getHoraInicial());
-			LocalDateTime dataHoraFinal = LocalDateTime.of(reserva.getData(), reserva.getHoraFinal());
+        for (Reserva reserva : reservas) {
+            if (reserva.getStatus() == StatusReserva.CANCELADO) {
+                continue;
+            }
 
-			// Marca como UTILIZADO após 2 horas do término
-			if (dataHoraFinal.plusHours(2).isBefore(agora) && reserva.getStatus() == StatusReserva.PENDENTE) {
-				reserva.setStatus(StatusReserva.UTILIZADO);
-				reserva.setUtilizado(true);
-				repository.save(reserva);
-			}
-		}
-	}
+            LocalDateTime dataHoraInicial = LocalDateTime.of(reserva.getData(), reserva.getHoraInicial());
+            LocalDateTime dataHoraFinal = LocalDateTime.of(reserva.getData(), reserva.getHoraFinal());
+
+            // Verifica se a reserva está acontecendo agora
+            if (agora.isAfter(dataHoraInicial) && agora.isBefore(dataHoraFinal)) {
+                reserva.setStatus(StatusReserva.EM_USO);
+                repository.save(reserva);
+            }
+            // Verifica se a reserva já passou
+            else if (agora.isAfter(dataHoraFinal.plusHours(2))) {
+                reserva.setStatus(StatusReserva.UTILIZADO);
+                reserva.setUtilizado(true);
+                repository.save(reserva);
+            }
+        }
+    }
 
 	public void confirmarUtilizacao(Long id) {
 	    Reserva reserva = repository.findById(id)

@@ -101,6 +101,7 @@ public class Reserva {
     
     public enum StatusReserva {
         PENDENTE,
+        EM_USO,    
         UTILIZADO,
         CANCELADO
     }
