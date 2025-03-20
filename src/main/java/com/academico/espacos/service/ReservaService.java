@@ -138,32 +138,21 @@ public class ReservaService {
 	}
 
 	@Scheduled(fixedRate = 60000) // Executa a cada minuto
-    @Transactional
-    public void atualizarStatusReservas() {
-        LocalDateTime agora = LocalDateTime.now();
-        List<Reserva> reservas = repository.findAll();
-
-        for (Reserva reserva : reservas) {
-            if (reserva.getStatus() == StatusReserva.CANCELADO) {
-                continue;
-            }
-
-            LocalDateTime dataHoraInicial = LocalDateTime.of(reserva.getData(), reserva.getHoraInicial());
-            LocalDateTime dataHoraFinal = LocalDateTime.of(reserva.getData(), reserva.getHoraFinal());
-
-            // Verifica se a reserva está acontecendo agora
-            if (agora.isAfter(dataHoraInicial) && agora.isBefore(dataHoraFinal)) {
-                reserva.setStatus(StatusReserva.EM_USO);
-                repository.save(reserva);
-            }
-            // Verifica se a reserva já passou
-            else if (agora.isAfter(dataHoraFinal.plusHours(2))) {
-                reserva.setStatus(StatusReserva.UTILIZADO);
-                reserva.setUtilizado(true);
-                repository.save(reserva);
-            }
-        }
-    }
+	public void atualizarStatusReservas() {
+	    LocalDateTime agora = LocalDateTime.now();
+	    LocalDate hoje = agora.toLocalDate();
+	    LocalTime horaAtual = agora.toLocalTime();
+	    
+	    List<Reserva> reservas = repository.findByDataAndStatus(hoje, StatusReserva.PENDENTE);
+	    
+	    for (Reserva reserva : reservas) {
+	        if (horaAtual.isAfter(reserva.getHoraInicial()) && 
+	            horaAtual.isBefore(reserva.getHoraFinal())) {
+	            reserva.setStatus(StatusReserva.EM_USO);
+	            repository.save(reserva);
+	        }
+	    }
+	}
 
 	public void confirmarUtilizacao(Long id) {
 	    Reserva reserva = repository.findById(id)
@@ -248,6 +237,60 @@ public class ReservaService {
 	    
 	    if (!conflitantes.isEmpty()) {
 	        throw new ReservaConflitanteException("Já existe uma reserva para este espaço neste horário");
+	    }
+	}
+
+	@Transactional
+	public void atualizarStatusReserva(Long id, StatusReserva novoStatus) {
+	    Reserva reserva = repository.findById(id)
+	        .orElseThrow(() -> new ResourceNotFoundException("Reserva não encontrada"));
+	    
+	    // Validações de transição de status
+	    if (reserva.getStatus() == StatusReserva.CANCELADO) {
+	        throw new IllegalStateException("Não é possível alterar o status de uma reserva cancelada");
+	    }
+	    
+	    if (reserva.getStatus() == StatusReserva.UTILIZADO && 
+	        novoStatus != StatusReserva.CANCELADO) {
+	        throw new IllegalStateException("Não é possível alterar o status de uma reserva já utilizada");
+	    }
+	    
+	    reserva.setStatus(novoStatus);
+	    repository.save(reserva);
+	}
+
+	@Scheduled(fixedRate = 60000) // Executa a cada minuto
+	@Transactional
+	public void atualizarStatusReservasAutomaticamente() {
+	    LocalDateTime agora = LocalDateTime.now();
+	    LocalDate hoje = agora.toLocalDate();
+	    LocalTime horaAtual = agora.toLocalTime();
+	    
+	    // Busca reservas pendentes do dia
+	    List<Reserva> reservasDoDia = repository.findByDataAndStatus(hoje, StatusReserva.PENDENTE);
+	    
+	    for (Reserva reserva : reservasDoDia) {
+	        // Atualiza para EM_USO se estiver no horário
+	        if (horaAtual.isAfter(reserva.getHoraInicial()) && 
+	            horaAtual.isBefore(reserva.getHoraFinal())) {
+	            reserva.setStatus(StatusReserva.EM_USO);
+	            repository.save(reserva);
+	        }
+	        
+	        // Atualiza para UTILIZADO se passou do horário e não foi confirmado
+	        if (horaAtual.isAfter(reserva.getHoraFinal())) {
+	            reserva.setStatus(StatusReserva.UTILIZADO);
+	            repository.save(reserva);
+	        }
+	    }
+	    
+	    // Atualiza reservas EM_USO que já passaram do horário
+	    List<Reserva> reservasEmUso = repository.findByDataAndStatus(hoje, StatusReserva.EM_USO);
+	    for (Reserva reserva : reservasEmUso) {
+	        if (horaAtual.isAfter(reserva.getHoraFinal())) {
+	            reserva.setStatus(StatusReserva.UTILIZADO);
+	            repository.save(reserva);
+	        }
 	    }
 	}
 }

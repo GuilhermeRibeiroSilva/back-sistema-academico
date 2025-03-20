@@ -6,11 +6,14 @@ import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import com.academico.espacos.model.Reserva;
+import com.academico.espacos.model.Reserva.StatusReserva;
 
-
+@Repository
 public interface ReservaRepository extends JpaRepository<Reserva, Long> {
 
 	@Query("SELECT r FROM Reserva r WHERE r.espacoAcademico.id = :espacoId " + "AND r.data = :data "
@@ -30,5 +33,15 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
 	List<Reserva> findByProfessorId(Long professorId);
 
 	boolean existsByIdAndUtilizadoTrue(Long id);
+
+	@Query("SELECT r FROM Reserva r WHERE r.data = :data AND r.status = :status")
+	List<Reserva> findByDataAndStatus(LocalDate data, StatusReserva status);
+
+	@Query("SELECT r FROM Reserva r WHERE r.data = :data AND r.status IN (:status)")
+	List<Reserva> findByDataAndStatusIn(LocalDate data, List<StatusReserva> status);
+
+	@Query("UPDATE Reserva r SET r.status = :novoStatus WHERE r.id = :id")
+	@Modifying
+	void atualizarStatus(@Param("id") Long id, @Param("novoStatus") StatusReserva novoStatus);
 
 }

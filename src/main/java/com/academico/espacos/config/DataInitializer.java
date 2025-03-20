@@ -7,6 +7,9 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
+import jakarta.annotation.PostConstruct;
 
 @Configuration
 public class DataInitializer {
@@ -16,6 +19,9 @@ public class DataInitializer {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private EntityManager entityManager;
 
     @Bean
     public CommandLineRunner initData() {
@@ -35,5 +41,38 @@ public class DataInitializer {
                 System.out.println("Senha: admin123");
             }
         };
+    }
+
+    @PostConstruct
+    public void verificarBancoDeDados() {
+        // Verifica se a coluna status existe e está correta
+        try {
+            Query query = entityManager.createNativeQuery(
+                "SELECT column_name, data_type FROM information_schema.columns " +
+                "WHERE table_name = 'reservas' AND column_name = 'status'"
+            );
+            
+            if (query.getResultList().isEmpty()) {
+                throw new RuntimeException("A coluna 'status' não existe na tabela 'reservas'");
+            }
+            
+            // Verifica se existem registros com status inválido
+            Query invalidStatusQuery = entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM reservas WHERE status NOT IN " +
+                "('PENDENTE', 'EM_USO', 'UTILIZADO', 'CANCELADO')"
+            );
+            
+            Long invalidCount = ((Number) invalidStatusQuery.getSingleResult()).longValue();
+            if (invalidCount > 0) {
+                // Corrige registros com status inválido
+                entityManager.createNativeQuery(
+                    "UPDATE reservas SET status = 'PENDENTE' WHERE status NOT IN " +
+                    "('PENDENTE', 'EM_USO', 'UTILIZADO', 'CANCELADO')"
+                ).executeUpdate();
+            }
+            
+        } catch (Exception e) {
+            throw new RuntimeException("Erro ao verificar estrutura do banco de dados", e);
+        }
     }
 }
