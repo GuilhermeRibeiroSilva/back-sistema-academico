@@ -2,50 +2,52 @@ package com.academico.espacos.security;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+
+import com.academico.espacos.model.Usuario;
+import com.academico.espacos.repository.TokenInvalidadoRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Component;
-import com.academico.espacos.repository.TokenInvalidadoRepository;
 
 import javax.crypto.SecretKey;
-import java.time.LocalDateTime;
+import java.util.Base64;
+import java.util.Collections;
 import java.util.Date;
 
 @Component
 public class JwtTokenProvider {
 
-    @Value("${app.jwt.secret}")
-    private String jwtSecret;
-
-    @Value("${app.jwt.expiration}")
-    private int jwtExpirationInMs;
-
-    private SecretKey key;
+    private final SecretKey jwtSecret;
+    private final long jwtExpirationInMs;
 
     @Autowired
     private TokenInvalidadoRepository tokenInvalidadoRepository;
 
-    public JwtTokenProvider() {
-        this.key = Keys.secretKeyFor(SignatureAlgorithm.HS512);
+    public JwtTokenProvider(
+            @Value("${jwt.secret:defaultSecretKeyForDevelopmentPurposesOnlyDoNotUseInProduction}") String jwtSecret,
+            @Value("${jwt.expiration:86400000}") long jwtExpirationInMs) {
+        this.jwtSecret = Keys.hmacShaKeyFor(Base64.getEncoder().encode(jwtSecret.getBytes()));
+        this.jwtExpirationInMs = jwtExpirationInMs;
     }
 
-    public String generateToken(String username, String role) {
+    public String gerarToken(Usuario usuario) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + jwtExpirationInMs);
 
         return Jwts.builder()
-                .setSubject(username)
-                .claim("role", role)
-                .setIssuedAt(new Date())
+                .setSubject(usuario.getUsername())
+                .claim("role", usuario.getRole())
+                .setIssuedAt(now)
                 .setExpiration(expiryDate)
-                .signWith(key)
+                .signWith(jwtSecret)
                 .compact();
     }
 
     public String getUsernameFromToken(String token) {
         Claims claims = Jwts.parserBuilder()
-                .setSigningKey(key)
+                .setSigningKey(jwtSecret)
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
@@ -55,7 +57,7 @@ public class JwtTokenProvider {
 
     public String getRoleFromToken(String token) {
         Claims claims = Jwts.parserBuilder()
-                .setSigningKey(key)
+                .setSigningKey(jwtSecret)
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
@@ -63,38 +65,25 @@ public class JwtTokenProvider {
         return claims.get("role", String.class);
     }
 
-    public LocalDateTime getExpiracaoFromToken(String token) {
+    public Date getExpirationDateFromToken(String token) {
         Claims claims = Jwts.parserBuilder()
-                .setSigningKey(key)
+                .setSigningKey(jwtSecret)
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
-        
-        return LocalDateTime.ofInstant(
-            claims.getExpiration().toInstant(),
-            java.time.ZoneId.systemDefault()
-        );
+
+        return claims.getExpiration();
     }
 
-    public boolean validateToken(String authToken) {
+    public boolean validateToken(String token) {
         try {
-            // Verifica se o token está na blacklist
-            if (tokenInvalidadoRepository.existsByToken(authToken)) {
+            if (tokenInvalidadoRepository.existsByToken(token)) {
                 return false;
             }
-
-            // Validação normal do token
-            Jwts.parserBuilder()
-                .setSigningKey(key)
-                .build()
-                .parseClaimsJws(authToken);
+            Jwts.parserBuilder().setSigningKey(jwtSecret).build().parseClaimsJws(token);
             return true;
         } catch (JwtException | IllegalArgumentException e) {
             return false;
         }
-    }
-
-    public long getExpirationTimeInMillis() {
-        return jwtExpirationInMs;
     }
 }

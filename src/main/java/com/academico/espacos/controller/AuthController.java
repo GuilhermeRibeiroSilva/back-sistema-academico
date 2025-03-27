@@ -1,11 +1,13 @@
 package com.academico.espacos.controller;
 
+import com.academico.espacos.dto.LoginRequest;
+import com.academico.espacos.dto.LoginResponse;
 import com.academico.espacos.model.Usuario;
 import com.academico.espacos.model.Professor;
 import com.academico.espacos.service.AuthService;
-import com.academico.espacos.security.JwtTokenProvider;
 import com.academico.espacos.exception.AuthenticationException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,26 +18,19 @@ public class AuthController {
     @Autowired
     private AuthService authService;
 
-    @Autowired
-    private JwtTokenProvider jwtTokenProvider;
-
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginRequest request) {
+    public ResponseEntity<?> login(@RequestBody LoginRequest loginRequest) {
         try {
-            Usuario usuario = authService.autenticar(request.getUsername(), request.getPassword());
-            String token = jwtTokenProvider.generateToken(usuario.getUsername(), usuario.getRole());
-            
-            return ResponseEntity.ok(new LoginResponse(
-                usuario.getId(),
-                usuario.getUsername(),
-                usuario.getRole(),
-                usuario.getProfessor() != null ? usuario.getProfessor().getId() : null,
-                token
-            ));
+            LoginResponse response = authService.login(loginRequest);
+            return ResponseEntity.ok(response);
         } catch (AuthenticationException e) {
             return ResponseEntity
-                .badRequest()
+                .status(HttpStatus.UNAUTHORIZED)
                 .body(new ErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ErrorResponse("Erro ao autenticar: " + e.getMessage()));
         }
     }
 
@@ -88,98 +83,26 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<?> logout(@RequestHeader("Authorization") String token) {
+    public ResponseEntity<?> logout(@RequestHeader("Authorization") String authHeader) {
         try {
-            if (token != null && token.startsWith("Bearer ")) {
-                token = token.substring(7);
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                String token = authHeader.substring(7);
                 authService.logout(token);
+                return ResponseEntity.ok(new SuccessResponse("Logout realizado com sucesso"));
+            } else {
+                return ResponseEntity
+                    .badRequest()
+                    .body(new ErrorResponse("Token inválido ou ausente"));
             }
-            return ResponseEntity.ok(new SuccessResponse("Logout realizado com sucesso"));
         } catch (Exception e) {
+            e.printStackTrace();  // Para debug
             return ResponseEntity
                 .badRequest()
-                .body(new ErrorResponse("Erro ao realizar logout"));
+                .body(new ErrorResponse("Erro ao realizar logout: " + e.getMessage()));
         }
     }
 
     // Classes DTO
-    public static class LoginRequest {
-        private String username;
-        private String password;
-
-        public String getUsername() {
-            return username;
-        }
-
-        public void setUsername(String username) {
-            this.username = username;
-        }
-
-        public String getPassword() {
-            return password;
-        }
-
-        public void setPassword(String password) {
-            this.password = password;
-        }
-    }
-
-    public static class LoginResponse {
-        private Long id;
-        private String username;
-        private String role;
-        private Long professorId;
-        private String token;
-
-        public LoginResponse(Long id, String username, String role, Long professorId, String token) {
-            this.id = id;
-            this.username = username;
-            this.role = role;
-            this.professorId = professorId;
-            this.token = token;
-        }
-
-        public Long getId() {
-            return id;
-        }
-
-        public void setId(Long id) {
-            this.id = id;
-        }
-
-        public String getUsername() {
-            return username;
-        }
-
-        public void setUsername(String username) {
-            this.username = username;
-        }
-
-        public String getRole() {
-            return role;
-        }
-
-        public void setRole(String role) {
-            this.role = role;
-        }
-
-        public Long getProfessorId() {
-            return professorId;
-        }
-
-        public void setProfessorId(Long professorId) {
-            this.professorId = professorId;
-        }
-
-        public String getToken() {
-            return token;
-        }
-
-        public void setToken(String token) {
-            this.token = token;
-        }
-    }
-
     public static class CriarUsuarioRequest {
         private String username;
         private String password;

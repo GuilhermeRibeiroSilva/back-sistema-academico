@@ -12,9 +12,11 @@ import java.util.List;
 import com.academico.espacos.exception.ResourceNotFoundException;
 import com.academico.espacos.controller.AuthController.ErrorResponse;
 import com.academico.espacos.exception.ReservaConflitanteException;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 @RestController
 @RequestMapping("/api/reservas")
+@PreAuthorize("hasAnyRole('ADMIN', 'PROFESSOR')")
 public class ReservaController {
 
     @Autowired

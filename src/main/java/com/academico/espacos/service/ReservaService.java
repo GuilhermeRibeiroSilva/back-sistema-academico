@@ -2,13 +2,16 @@ package com.academico.espacos.service;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.academico.espacos.model.Reserva;
 import com.academico.espacos.model.Reserva.StatusReserva;
 import com.academico.espacos.model.EspacoAcademico;
+import com.academico.espacos.model.Usuario;
 import com.academico.espacos.repository.ReservaRepository;
 import com.academico.espacos.repository.EspacoAcademicoRepository;
+import com.academico.espacos.repository.UsuarioRepository;
 import com.academico.espacos.exception.ResourceNotFoundException;
 import com.academico.espacos.exception.ReservaConflitanteException;
 import java.util.List;
@@ -26,6 +29,9 @@ public class ReservaService {
 
 	@Autowired
 	private EspacoAcademicoRepository espacoRepository;
+
+	@Autowired
+	private UsuarioRepository usuarioRepository;
 
 	public Reserva solicitar(Reserva reserva) {
 		EspacoAcademico espaco = espacoRepository.findById(reserva.getEspacoAcademico().getId())
@@ -138,6 +144,7 @@ public class ReservaService {
 	}
 
 	@Scheduled(fixedRate = 60000) // Executa a cada minuto
+	@Transactional
 	public void atualizarStatusReservas() {
 		LocalDateTime agora = LocalDateTime.now();
 		LocalDate hoje = agora.toLocalDate();
@@ -177,7 +184,7 @@ public class ReservaService {
 
 		for (Reserva reserva : reservas) {
 			// Pular reservas canceladas
-			if (reserva.getStatus() == StatusReserva.CANCELADO) {
+			if (reserva.getStatus() == StatusReserva.CANCELADA) {
 				continue;
 			}
 
@@ -236,7 +243,7 @@ public class ReservaService {
 
 		// Remove a própria reserva da lista de conflitos (caso seja uma atualização)
 		conflitantes = conflitantes.stream().filter(r -> !r.getId().equals(reserva.getId()))
-				.filter(r -> r.getStatus() != StatusReserva.CANCELADO).collect(Collectors.toList());
+				.filter(r -> r.getStatus() != StatusReserva.CANCELADA).collect(Collectors.toList());
 
 		if (!conflitantes.isEmpty()) {
 			throw new ReservaConflitanteException("Já existe uma reserva para este espaço neste horário");
@@ -249,11 +256,11 @@ public class ReservaService {
 				.orElseThrow(() -> new ResourceNotFoundException("Reserva não encontrada"));
 
 		// Validações de transição de status
-		if (reserva.getStatus() == StatusReserva.CANCELADO) {
+		if (reserva.getStatus() == StatusReserva.CANCELADA) {
 			throw new IllegalStateException("Não é possível alterar o status de uma reserva cancelada");
 		}
 
-		if (reserva.getStatus() == StatusReserva.UTILIZADO && novoStatus != StatusReserva.CANCELADO) {
+		if (reserva.getStatus() == StatusReserva.UTILIZADO && novoStatus != StatusReserva.CANCELADA) {
 			throw new IllegalStateException("Não é possível alterar o status de uma reserva já utilizada");
 		}
 
@@ -293,5 +300,25 @@ public class ReservaService {
 				repository.save(reserva);
 			}
 		}
+	}
+
+	public List<Reserva> listarReservas(Usuario usuarioAtual) {
+		if (usuarioAtual.isAdmin()) {
+			return repository.findAll();
+		} else {
+			return repository.findByProfessorId(usuarioAtual.getProfessor().getId());
+		}
+	}
+
+	@Transactional
+	public void excluir(Long reservaId, Usuario usuarioAtual) {
+		Reserva reserva = repository.findById(reservaId)
+				.orElseThrow(() -> new ResourceNotFoundException("Reserva não encontrada"));
+
+		if (!usuarioAtual.canAccess(reserva)) {
+			throw new AccessDeniedException("Sem permissão para acessar esta reserva");
+		}
+
+		repository.delete(reserva);
 	}
 }

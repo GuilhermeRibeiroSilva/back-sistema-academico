@@ -2,6 +2,8 @@ package com.academico.espacos.service;
 
 import com.academico.espacos.model.*;
 import com.academico.espacos.repository.*;
+import com.academico.espacos.dto.LoginRequest;
+import com.academico.espacos.dto.LoginResponse;
 import com.academico.espacos.exception.AuthenticationException;
 import com.academico.espacos.security.JwtTokenProvider;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,6 +15,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Base64;
+import java.util.Date;
 
 @Service
 public class AuthService {
@@ -95,8 +98,9 @@ public class AuthService {
         TokenInvalidado tokenInvalidado = new TokenInvalidado();
         tokenInvalidado.setToken(token);
         tokenInvalidado.setDataInvalidacao(LocalDateTime.now());
-        tokenInvalidado.setDataExpiracao(jwtTokenProvider.getExpiracaoFromToken(token));
-        
+        // Obter a data de expiração do token para limpar posteriormente
+        Date expiracao = jwtTokenProvider.getExpirationDateFromToken(token);
+        tokenInvalidado.setDataExpiracao(expiracao.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDateTime());
         tokenInvalidadoRepository.save(tokenInvalidado);
         
         limparTokensExpirados();
@@ -134,5 +138,25 @@ public class AuthService {
 
     public boolean isProfessor(Usuario usuario) {
         return "ROLE_PROFESSOR".equals(usuario.getRole());
+    }
+
+    @Transactional
+    public LoginResponse login(LoginRequest request) {
+        Usuario usuario = autenticar(request.getUsername(), request.getPassword());
+        String token = jwtTokenProvider.gerarToken(usuario);
+        
+        LoginResponse response = new LoginResponse();
+        response.setToken(token);
+        response.setId(usuario.getId());
+        response.setUsername(usuario.getUsername());
+        response.setRole(usuario.getRole());
+        
+        // Adicionar informações do professor se aplicável
+        if (isProfessor(usuario) && usuario.getProfessor() != null) {
+            response.setProfessorId(usuario.getProfessor().getId());
+            response.setProfessorNome(usuario.getProfessor().getNome());
+        }
+        
+        return response;
     }
 }

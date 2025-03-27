@@ -29,7 +29,7 @@ public class Reserva {
     private LocalTime horaFinal;
     
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(name = "status", nullable = false)
     private StatusReserva status = StatusReserva.PENDENTE;
     
     private boolean utilizado = false;
@@ -101,8 +101,9 @@ public class Reserva {
     
     public enum StatusReserva {
         PENDENTE,
+        CONFIRMADA,
         EM_USO,    
         UTILIZADO,
-        CANCELADO
+        CANCELADA
     }
 }

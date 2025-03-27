@@ -18,7 +18,8 @@ public class Usuario {
     @Column(nullable = false)
     private String role; // ROLE_ADMIN ou ROLE_PROFESSOR
 
-    @OneToOne
+    @OneToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "professor_id")
     private Professor professor;
 
     // Getters e Setters
@@ -60,5 +61,23 @@ public class Usuario {
 
     public void setProfessor(Professor professor) {
         this.professor = professor;
+    }
+
+    // Novo método para verificar propriedade dos dados
+    public boolean isOwner(Professor professor) {
+        return this.professor != null && this.professor.getId().equals(professor.getId());
+    }
+
+    public boolean canAccess(Reserva reserva) {
+        return isAdmin() || 
+               (isProfessor() && reserva.getProfessor().getId().equals(this.professor.getId()));
+    }
+
+    public boolean isAdmin() {
+        return "ROLE_ADMIN".equals(this.role);
+    }
+
+    public boolean isProfessor() {
+        return "ROLE_PROFESSOR".equals(this.role);
     }
 }

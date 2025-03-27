@@ -30,30 +30,28 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        http
-            .cors(cors -> cors.configurationSource(request -> {
-            CorsConfiguration configuration = new CorsConfiguration();
-            configuration.setAllowedOrigins(Arrays.asList("http://localhost:3000"));
-            configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-            configuration.setAllowedHeaders(Arrays.asList("*"));
-            configuration.setAllowCredentials(true);
-            return configuration;
-           }))
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        return http
             .csrf(csrf -> csrf.disable())
-            .sessionManagement(session -> session
-                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-            )
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                .requestMatchers("/api/professor/**").hasRole("PROFESSOR")
+                .requestMatchers("/api/professores/**").hasAnyRole("ADMIN", "PROFESSOR")
+                .requestMatchers("/api/espacos/**").hasAnyRole("ADMIN", "PROFESSOR")
+                .requestMatchers("/api/reservas/**").hasAnyRole("ADMIN", "PROFESSOR")
                 .anyRequest().authenticated()
-            );
-
-        http.addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
-        
-        return http.build();
+            )
+            .cors(cors -> cors.configurationSource(request -> {
+                CorsConfiguration configuration = new CorsConfiguration();
+                configuration.setAllowedOrigins(Arrays.asList("http://localhost:3000"));
+                configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
+                configuration.setAllowedHeaders(Arrays.asList("*"));
+                configuration.setAllowCredentials(true);
+                return configuration;
+            }))
+            .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class)
+            .build();
     }
 
     @Bean

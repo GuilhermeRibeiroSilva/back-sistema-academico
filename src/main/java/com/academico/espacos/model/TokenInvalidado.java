@@ -6,20 +6,18 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "tokens_invalidados")
 public class TokenInvalidado {
+    
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    @Column(nullable = false, unique = true)
+    
+    @Column(length = 1000)
     private String token;
-
-    @Column(nullable = false)
+    
     private LocalDateTime dataInvalidacao;
-
-    @Column(nullable = false)
+    
     private LocalDateTime dataExpiracao;
 
-    // Getters e Setters
     public Long getId() {
         return id;
     }
@@ -43,11 +41,11 @@ public class TokenInvalidado {
     public void setDataInvalidacao(LocalDateTime dataInvalidacao) {
         this.dataInvalidacao = dataInvalidacao;
     }
-
+    
     public LocalDateTime getDataExpiracao() {
         return dataExpiracao;
     }
-
+    
     public void setDataExpiracao(LocalDateTime dataExpiracao) {
         this.dataExpiracao = dataExpiracao;
     }

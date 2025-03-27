@@ -3,13 +3,15 @@ package com.academico.espacos.controller;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 import com.academico.espacos.model.EspacoAcademico;
 import com.academico.espacos.service.EspacoAcademicoService;
 import java.util.List;
-import com.academico.espacos.dto.ErrorResponse;
+import com.academico.espacos.exception.ErrorResponse;
 
 @RestController
 @RequestMapping("/api/espacos")
+@PreAuthorize("hasAnyRole('ADMIN', 'PROFESSOR')")
 public class EspacoAcademicoController {
 
     @Autowired

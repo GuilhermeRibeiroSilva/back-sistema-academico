@@ -70,4 +70,14 @@ public class UsuarioService {
         
         usuarioRepository.delete(usuario);
     }
+    
+    @Transactional
+    public void excluirUsuario(Long usuarioId) {
+        Usuario usuario = usuarioRepository.findById(usuarioId)
+            .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado"));
+        
+        // Com a exclusão em cascata configurada no banco, 
+        // não precisamos excluir manualmente as reservas
+        usuarioRepository.delete(usuario);
+    }
 }
