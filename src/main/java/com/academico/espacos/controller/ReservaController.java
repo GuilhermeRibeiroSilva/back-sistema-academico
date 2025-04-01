@@ -13,11 +13,15 @@ import com.academico.espacos.exception.ResourceNotFoundException;
 import com.academico.espacos.controller.AuthController.ErrorResponse;
 import com.academico.espacos.exception.ReservaConflitanteException;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestController
 @RequestMapping("/api/reservas")
 @PreAuthorize("hasAnyRole('ADMIN', 'PROFESSOR')")
 public class ReservaController {
+
+    private static final Logger logger = LoggerFactory.getLogger(ReservaController.class);
 
     @Autowired
     private ReservaService service;
@@ -41,13 +45,15 @@ public class ReservaController {
             Reserva novaReserva = service.solicitar(reserva);
             return ResponseEntity.ok(novaReserva);
         } catch (Exception e) {
-            return ResponseEntity.badRequest()
-                .body(new ErrorResponse(e.getMessage()));
+            // Prática não recomendada para produção
+            e.printStackTrace();  // Substituir por logger
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ErrorResponse("Erro interno do servidor"));
         }
     }
     
     @PutMapping("/{id}")
-    public ResponseEntity<Reserva> atualizar(@PathVariable Long id, @RequestBody Reserva reserva) {
+    public ResponseEntity<?> atualizar(@PathVariable Long id, @RequestBody Reserva reserva) {
         try {
             reserva.setId(id); // Garante que o ID está correto
             Reserva reservaAtualizada = service.atualizar(reserva);
@@ -55,11 +61,16 @@ public class ReservaController {
         } catch (ResourceNotFoundException e) {
             return ResponseEntity.notFound().build();
         } catch (ReservaConflitanteException e) {
-            return ResponseEntity.status(409).build();
+            return ResponseEntity.status(409)
+                .body(new ErrorResponse(e.getMessage()));
         } catch (IllegalArgumentException | IllegalStateException e) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest()
+                .body(new ErrorResponse(e.getMessage()));
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().build();
+            // Usar logger em vez de printStackTrace
+            logger.error("Erro ao atualizar reserva: ", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ErrorResponse("Erro interno do servidor"));
         }
     }
 
@@ -76,14 +87,19 @@ public class ReservaController {
     }
     
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> cancelarReserva(@PathVariable Long id) {
+    public ResponseEntity<?> cancelarReserva(@PathVariable Long id) {
         try {
             service.cancelarReserva(id);
             return ResponseEntity.ok().build();
         } catch (ResourceNotFoundException e) {
             return ResponseEntity.notFound().build();
+        } catch (IllegalStateException e) {
+            return ResponseEntity.badRequest()
+                .body(new ErrorResponse(e.getMessage()));
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().build();
+            logger.error("Erro ao cancelar reserva: ", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ErrorResponse("Erro interno do servidor"));
         }
     }
 
@@ -97,8 +113,8 @@ public class ReservaController {
         } catch (IllegalStateException e) {
             return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
         } catch (Exception e) {
-            // Log the exception for debugging
-            e.printStackTrace();
+            // Prática não recomendada para produção
+            e.printStackTrace();  // Substituir por logger
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ErrorResponse("Erro interno do servidor"));
         }

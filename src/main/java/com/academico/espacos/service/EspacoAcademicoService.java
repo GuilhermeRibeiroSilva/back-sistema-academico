@@ -10,7 +10,8 @@ import java.util.Optional;
 import org.springframework.transaction.annotation.Transactional;
 import com.academico.espacos.model.Reserva;
 import com.academico.espacos.repository.ReservaRepository;
-
+import java.time.LocalDate;
+import java.util.stream.Collectors;
 
 @Service
 public class EspacoAcademicoService {
@@ -21,9 +22,16 @@ public class EspacoAcademicoService {
     @Autowired
     private ReservaRepository reservaRepository;
 
+    // Adicionar validação para outros campos obrigatórios
     public EspacoAcademico salvar(EspacoAcademico espacoAcademico) {
         if (espacoAcademico.getSigla() == null || espacoAcademico.getSigla().trim().isEmpty()) {
             throw new IllegalArgumentException("A sigla é obrigatória");
+        }
+        if (espacoAcademico.getNome() == null || espacoAcademico.getNome().trim().isEmpty()) {
+            throw new IllegalArgumentException("O nome é obrigatório");
+        }
+        if (espacoAcademico.getCapacidadeAlunos() == null || espacoAcademico.getCapacidadeAlunos() <= 0) {
+            throw new IllegalArgumentException("A capacidade de alunos deve ser um número positivo");
         }
         return repository.save(espacoAcademico);
     }
@@ -66,5 +74,20 @@ public class EspacoAcademicoService {
 
     public List<EspacoAcademico> listarDisponiveis() {
         return repository.findByDisponivelTrue();
+    }
+
+    // Método para verificar disponibilidade real considerando reservas
+    public List<EspacoAcademico> listarDisponiveisParaReserva(LocalDate data, String horaInicial, String horaFinal) {
+        // Implementação para verificar espaços realmente disponíveis no horário específico
+        List<EspacoAcademico> espacosDisponiveis = repository.findByDisponivelTrue();
+        
+        // Filtrar espaços com reservas no mesmo horário
+        return espacosDisponiveis.stream()
+            .filter(espaco -> {
+                List<Reserva> reservasConflitantes = reservaRepository
+                    .findConflictingReservations(espaco.getId(), data, horaInicial, horaFinal);
+                return reservasConflitantes.isEmpty();
+            })
+            .collect(Collectors.toList());
     }
 }

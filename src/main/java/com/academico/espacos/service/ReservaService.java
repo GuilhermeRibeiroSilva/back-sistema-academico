@@ -33,14 +33,9 @@ public class ReservaService {
 	@Autowired
 	private UsuarioRepository usuarioRepository;
 
-	public Reserva solicitar(Reserva reserva) {
-		EspacoAcademico espaco = espacoRepository.findById(reserva.getEspacoAcademico().getId())
-				.orElseThrow(() -> new ResourceNotFoundException("Espaço Acadêmico não encontrado"));
-
-		if (!espaco.isDisponivel()) {
-			throw new IllegalStateException("Este espaço acadêmico não está disponível para reservas");
-		}
-
+	// Centralizar validações
+	private void validarReserva(Reserva reserva, boolean isUpdate) {
+		// Verificar campos obrigatórios
 		if (reserva.getEspacoAcademico() == null || reserva.getEspacoAcademico().getId() == null) {
 			throw new IllegalArgumentException("Espaço Acadêmico é obrigatório");
 		}
@@ -58,7 +53,10 @@ public class ReservaService {
 		}
 
 		// Validar se a data não é passada
-		if (reserva.getData().isBefore(LocalDate.now())) {
+		LocalDateTime agora = LocalDateTime.now();
+		LocalDate hoje = agora.toLocalDate();
+
+		if (reserva.getData().isBefore(hoje)) {
 			throw new IllegalArgumentException("Não é possível fazer reservas para datas passadas");
 		}
 
@@ -67,54 +65,49 @@ public class ReservaService {
 			throw new IllegalArgumentException("Hora final não pode ser anterior à hora inicial");
 		}
 
-		// Verificar conflitos
-		List<Reserva> reservasConflitantes = repository.findReservasConflitantes(reserva.getEspacoAcademico().getId(),
-				reserva.getData(), reserva.getHoraInicial(), reserva.getHoraFinal());
+		 // Validar espaço disponível
+		EspacoAcademico espaco = espacoRepository.findById(reserva.getEspacoAcademico().getId())
+			.orElseThrow(() -> new ResourceNotFoundException("Espaço Acadêmico não encontrado"));
+
+		if (!espaco.isDisponivel()) {
+			throw new IllegalStateException("Este espaço acadêmico não está disponível para reservas");
+		}
+
+		 // Verificar conflitos (opcionalmente excluindo a própria reserva se for atualização)
+		List<Reserva> reservasConflitantes = repository.findReservasConflitantes(
+			reserva.getEspacoAcademico().getId(),
+			reserva.getData(), 
+			reserva.getHoraInicial(), 
+			reserva.getHoraFinal());
+
+		if (isUpdate) {
+			reservasConflitantes = reservasConflitantes.stream()
+				.filter(r -> !r.getId().equals(reserva.getId()))
+				.collect(Collectors.toList());
+		}
 
 		if (!reservasConflitantes.isEmpty()) {
 			throw new ReservaConflitanteException("Já existe uma reserva para este horário");
 		}
+	}
 
+	// Usar nas funções existentes
+	public Reserva solicitar(Reserva reserva) {
+		validarReserva(reserva, false);
 		return repository.save(reserva);
 	}
 
 	public Reserva atualizar(Reserva reserva) {
 		// Verificar se a reserva existe
 		Reserva reservaExistente = repository.findById(reserva.getId())
-				.orElseThrow(() -> new ResourceNotFoundException("Reserva não encontrada"));
+			.orElseThrow(() -> new ResourceNotFoundException("Reserva não encontrada"));
 
 		// Não permitir atualizar reservas já utilizadas
 		if (reservaExistente.isUtilizado()) {
 			throw new IllegalStateException("Não é possível alterar uma reserva já utilizada");
 		}
 
-		// Validar se a data não é passada
-		if (reserva.getData().isBefore(LocalDate.now())) {
-			throw new IllegalArgumentException("Não é possível atualizar para datas passadas");
-		}
-
-		// Validar horários
-		if (reserva.getHoraFinal().isBefore(reserva.getHoraInicial())) {
-			throw new IllegalArgumentException("Hora final não pode ser anterior à hora inicial");
-		}
-
-		// Verificar conflitos (excluindo a própria reserva)
-		List<Reserva> reservasConflitantes = repository
-				.findReservasConflitantes(reserva.getEspacoAcademico().getId(), reserva.getData(),
-						reserva.getHoraInicial(), reserva.getHoraFinal())
-				.stream().filter(r -> !r.getId().equals(reserva.getId())).toList();
-
-		if (!reservasConflitantes.isEmpty()) {
-			throw new ReservaConflitanteException("Já existe uma reserva para este horário");
-		}
-
-		// Validar se o espaço existe e está disponível
-		EspacoAcademico espaco = espacoRepository.findById(reserva.getEspacoAcademico().getId())
-				.orElseThrow(() -> new ResourceNotFoundException("Espaço Acadêmico não encontrado"));
-
-		if (!espaco.isDisponivel()) {
-			throw new IllegalStateException("Este espaço acadêmico não está disponível para reservas");
-		}
+		validarReserva(reserva, true);
 
 		// Manter alguns dados originais que não devem ser alterados
 		reserva.setUtilizado(reservaExistente.isUtilizado());
@@ -122,39 +115,35 @@ public class ReservaService {
 		return repository.save(reserva);
 	}
 
-	private void validarDadosReserva(Reserva reserva) {
-		LocalDateTime agora = LocalDateTime.now();
-		LocalDateTime dataHoraReserva = LocalDateTime.of(reserva.getData(), reserva.getHoraInicial());
-
-		// Não permite reservas em datas passadas
-		if (dataHoraReserva.isBefore(agora)) {
-			throw new IllegalArgumentException("Não é possível fazer reservas em datas/horários passados");
-		}
-
-		// Validação do horário final
-		if (reserva.getHoraFinal().isBefore(reserva.getHoraInicial())) {
-			throw new IllegalArgumentException("Hora final deve ser posterior à hora inicial");
-		}
-
-		// Validação do mesmo dia
-		LocalTime meiaNoite = LocalTime.MIDNIGHT;
-		if (reserva.getHoraFinal().equals(meiaNoite)) {
-			throw new IllegalArgumentException("Reservas devem terminar até 23:59 do mesmo dia");
-		}
-	}
-
 	@Scheduled(fixedRate = 60000) // Executa a cada minuto
 	@Transactional
-	public void atualizarStatusReservas() {
+	public void atualizarStatusReservasAutomaticamente() {
 		LocalDateTime agora = LocalDateTime.now();
 		LocalDate hoje = agora.toLocalDate();
 		LocalTime horaAtual = agora.toLocalTime();
 
-		List<Reserva> reservas = repository.findByDataAndStatus(hoje, StatusReserva.PENDENTE);
+		// Busca reservas pendentes do dia
+		List<Reserva> reservasDoDia = repository.findByDataAndStatus(hoje, StatusReserva.PENDENTE);
 
-		for (Reserva reserva : reservas) {
+		for (Reserva reserva : reservasDoDia) {
+			// Atualiza para EM_USO se estiver no horário
 			if (horaAtual.isAfter(reserva.getHoraInicial()) && horaAtual.isBefore(reserva.getHoraFinal())) {
 				reserva.setStatus(StatusReserva.EM_USO);
+				repository.save(reserva);
+			}
+
+			// Atualiza para UTILIZADO se passou do horário e não foi confirmado
+			if (horaAtual.isAfter(reserva.getHoraFinal())) {
+				reserva.setStatus(StatusReserva.UTILIZADO);
+				repository.save(reserva);
+			}
+		}
+
+		// Atualiza reservas EM_USO que já passaram do horário
+		List<Reserva> reservasEmUso = repository.findByDataAndStatus(hoje, StatusReserva.EM_USO);
+		for (Reserva reserva : reservasEmUso) {
+			if (horaAtual.isAfter(reserva.getHoraFinal())) {
+				reserva.setStatus(StatusReserva.UTILIZADO);
 				repository.save(reserva);
 			}
 		}
@@ -266,40 +255,6 @@ public class ReservaService {
 
 		reserva.setStatus(novoStatus);
 		repository.save(reserva);
-	}
-
-	@Scheduled(fixedRate = 60000) // Executa a cada minuto
-	@Transactional
-	public void atualizarStatusReservasAutomaticamente() {
-		LocalDateTime agora = LocalDateTime.now();
-		LocalDate hoje = agora.toLocalDate();
-		LocalTime horaAtual = agora.toLocalTime();
-
-		// Busca reservas pendentes do dia
-		List<Reserva> reservasDoDia = repository.findByDataAndStatus(hoje, StatusReserva.PENDENTE);
-
-		for (Reserva reserva : reservasDoDia) {
-			// Atualiza para EM_USO se estiver no horário
-			if (horaAtual.isAfter(reserva.getHoraInicial()) && horaAtual.isBefore(reserva.getHoraFinal())) {
-				reserva.setStatus(StatusReserva.EM_USO);
-				repository.save(reserva);
-			}
-
-			// Atualiza para UTILIZADO se passou do horário e não foi confirmado
-			if (horaAtual.isAfter(reserva.getHoraFinal())) {
-				reserva.setStatus(StatusReserva.UTILIZADO);
-				repository.save(reserva);
-			}
-		}
-
-		// Atualiza reservas EM_USO que já passaram do horário
-		List<Reserva> reservasEmUso = repository.findByDataAndStatus(hoje, StatusReserva.EM_USO);
-		for (Reserva reserva : reservasEmUso) {
-			if (horaAtual.isAfter(reserva.getHoraFinal())) {
-				reserva.setStatus(StatusReserva.UTILIZADO);
-				repository.save(reserva);
-			}
-		}
 	}
 
 	public List<Reserva> listarReservas(Usuario usuarioAtual) {

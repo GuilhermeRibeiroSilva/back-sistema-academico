@@ -95,7 +95,6 @@ public class AuthController {
                     .body(new ErrorResponse("Token inválido ou ausente"));
             }
         } catch (Exception e) {
-            e.printStackTrace();  // Para debug
             return ResponseEntity
                 .badRequest()
                 .body(new ErrorResponse("Erro ao realizar logout: " + e.getMessage()));
@@ -182,39 +181,6 @@ public class AuthController {
 
         public void setSenhaAtual(String senhaAtual) {
             this.senhaAtual = senhaAtual;
-        }
-
-        public String getNovaSenha() {
-            return novaSenha;
-        }
-
-        public void setNovaSenha(String novaSenha) {
-            this.novaSenha = novaSenha;
-        }
-    }
-
-    public static class RecuperacaoSenhaRequest {
-        private String email;
-
-        public String getEmail() {
-            return email;
-        }
-
-        public void setEmail(String email) {
-            this.email = email;
-        }
-    }
-
-    public static class ConfirmarRecuperacaoRequest {
-        private String token;
-        private String novaSenha;
-
-        public String getToken() {
-            return token;
-        }
-
-        public void setToken(String token) {
-            this.token = token;
         }
 
         public String getNovaSenha() {

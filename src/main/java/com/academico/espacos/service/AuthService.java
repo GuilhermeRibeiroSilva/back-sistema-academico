@@ -26,16 +26,10 @@ public class AuthService {
     private ProfessorRepository professorRepository;
 
     @Autowired
-    private RecuperacaoSenhaRepository recuperacaoSenhaRepository;
-
-    @Autowired
     private TokenInvalidadoRepository tokenInvalidadoRepository;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
-
-    @Autowired
-    private EmailService emailService;
 
     @Autowired
     private JwtTokenProvider jwtTokenProvider;
@@ -115,21 +109,6 @@ public class AuthService {
         if (usuarioRepository.findByUsername(username).isPresent()) {
             throw new AuthenticationException("Username já existe");
         }
-    }
-
-
-    private void enviarEmailRecuperacao(String email, String token) {
-        String linkRecuperacao = "http://seu-site.com/recuperar-senha?token=" + token;
-        String conteudoEmail = String.format(
-            "Olá,\n\nPara recuperar sua senha, acesse o link: %s\n\nO link expira em 24 horas.",
-            linkRecuperacao
-        );
-
-        emailService.enviarEmail(
-            email,
-            "Recuperação de Senha",
-            conteudoEmail
-        );
     }
 
     public boolean isAdmin(Usuario usuario) {

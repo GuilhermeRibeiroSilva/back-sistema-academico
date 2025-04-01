@@ -7,13 +7,10 @@ import com.academico.espacos.model.Usuario;
 import com.academico.espacos.repository.TokenInvalidadoRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.util.Base64;
-import java.util.Collections;
 import java.util.Date;
 
 @Component
@@ -76,13 +73,28 @@ public class JwtTokenProvider {
     }
 
     public boolean validateToken(String token) {
+        if (token == null) {
+            return false;
+        }
+        
         try {
             if (tokenInvalidadoRepository.existsByToken(token)) {
                 return false;
             }
-            Jwts.parserBuilder().setSigningKey(jwtSecret).build().parseClaimsJws(token);
-            return true;
+            
+            Claims claims = Jwts.parserBuilder()
+                .setSigningKey(jwtSecret)
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+                
+            // Verificar se o token expirou
+            return !claims.getExpiration().before(new Date());
+        } catch (ExpiredJwtException e) {
+            // Log específico para token expirado
+            return false;
         } catch (JwtException | IllegalArgumentException e) {
+            // Log para outros problemas com token
             return false;
         }
     }

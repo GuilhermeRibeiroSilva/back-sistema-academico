@@ -8,6 +8,7 @@ import com.academico.espacos.model.EspacoAcademico;
 import com.academico.espacos.service.EspacoAcademicoService;
 import java.util.List;
 import com.academico.espacos.exception.ErrorResponse;
+import com.academico.espacos.exception.ResourceNotFoundException;
 
 @RestController
 @RequestMapping("/api/espacos")
@@ -27,6 +28,11 @@ public class EspacoAcademicoController {
         return ResponseEntity.ok(service.listarTodos());
     }
 
+    @GetMapping("/disponiveis")
+    public ResponseEntity<List<EspacoAcademico>> listarDisponiveis() {
+        return ResponseEntity.ok(service.listarDisponiveis());
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<EspacoAcademico> buscarPorId(@PathVariable Long id) {
         return service.buscarPorId(id)
@@ -35,8 +41,14 @@ public class EspacoAcademicoController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<EspacoAcademico> atualizar(@PathVariable Long id, @RequestBody EspacoAcademico espacoAcademico) {
-        return ResponseEntity.ok(service.atualizar(id, espacoAcademico));
+    public ResponseEntity<?> atualizar(@PathVariable Long id, @RequestBody EspacoAcademico espacoAcademico) {
+        try {
+            return ResponseEntity.ok(service.atualizar(id, espacoAcademico));
+        } catch (ResourceNotFoundException e) {
+            return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
+        }
     }
 
     @PatchMapping("/{id}/indisponivel")

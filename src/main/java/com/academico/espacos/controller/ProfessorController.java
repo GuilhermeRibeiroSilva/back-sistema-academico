@@ -3,6 +3,7 @@ package com.academico.espacos.controller;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.academico.espacos.exception.ErrorResponse;
@@ -32,7 +34,8 @@ public class ProfessorController {
 
     @PostMapping
     public ResponseEntity<Professor> criar(@RequestBody Professor professor) {
-        return ResponseEntity.ok(service.salvar(professor));
+        Professor novoProfessor = service.salvar(professor);
+        return ResponseEntity.status(HttpStatus.CREATED).body(novoProfessor);
     }
 
     @GetMapping
@@ -53,7 +56,7 @@ public class ProfessorController {
     }
     
     @GetMapping("/{id}/reservas")
-    public ResponseEntity<List<Reserva>> listarReservasDoProfessor(@PathVariable Long id) {
+    public ResponseEntity<?> listarReservasDoProfessor(@PathVariable Long id) {
         try {
             // Verifica se o professor existe
             Professor professor = service.buscarPorId(id)
@@ -65,14 +68,17 @@ public class ProfessorController {
         } catch (ResourceNotFoundException e) {
             return ResponseEntity.notFound().build();
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(null);
+            return ResponseEntity.badRequest().body(new ErrorResponse("Erro ao listar reservas: " + e.getMessage()));
         }
     }
     
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> excluir(@PathVariable Long id) {
+    public ResponseEntity<?> excluir(
+            @PathVariable Long id,
+            @RequestParam(name = "force", defaultValue = "false") boolean force) {
         try {
-            service.excluir(id);
+            // Usar novo método no service que aceita o parâmetro force
+            service.excluir(id, force);
             return ResponseEntity.ok().build();
         } catch (ResourceNotFoundException e) {
             return ResponseEntity.notFound().build();

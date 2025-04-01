@@ -4,7 +4,10 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "tokens_invalidados")
+@Table(name = "tokens_invalidados", indexes = {
+    @Index(name = "idx_token", columnList = "token"),
+    @Index(name = "idx_expiracao", columnList = "dataExpiracao")
+})
 public class TokenInvalidado {
     
     @Id

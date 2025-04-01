@@ -16,12 +16,19 @@ import com.academico.espacos.model.Reserva.StatusReserva;
 @Repository
 public interface ReservaRepository extends JpaRepository<Reserva, Long> {
 
-	@Query("SELECT r FROM Reserva r WHERE r.espacoAcademico.id = :espacoId " + "AND r.data = :data "
-			+ "AND ((r.horaInicial < :horaFinal AND r.horaFinal > :horaInicial)) " + "AND r.utilizado = false")
-	List<Reserva> findReservasConflitantes(Long espacoId, LocalDate data, LocalTime horaInicial, LocalTime horaFinal);
+	@Query("SELECT r FROM Reserva r WHERE r.espacoAcademico.id = :espacoId " + 
+	       "AND r.data = :data " +
+	       "AND ((r.horaInicial < :horaFinal AND r.horaFinal > :horaInicial)) " + 
+	       "AND r.status != 'CANCELADO'")
+	List<Reserva> findReservasConflitantes(@Param("espacoId") Long espacoId, @Param("data") LocalDate data, @Param("horaInicial") LocalTime horaInicial, @Param("horaFinal") LocalTime horaFinal);
 
-	@Query("SELECT r FROM Reserva r WHERE r.data >= CURRENT_DATE ORDER BY r.data ASC, r.horaInicial ASC")
-	List<Reserva> findAllFutureReservasOrderByDataHora();
+	// Método que aceita strings para horários
+	@Query("SELECT r FROM Reserva r WHERE r.espacoAcademico.id = :espacoId " + 
+	       "AND r.data = :data " +
+	       "AND r.horaInicial < FUNCTION('STR_TO_DATE', :horaFinal, '%H:%i') " +
+	       "AND r.horaFinal > FUNCTION('STR_TO_DATE', :horaInicial, '%H:%i') " + 
+	       "AND r.status != 'CANCELADO'")
+	List<Reserva> findConflictingReservations(@Param("espacoId") Long espacoId, @Param("data") LocalDate data, @Param("horaInicial") String horaInicial, @Param("horaFinal") String horaFinal);
 
 	@Query("SELECT r FROM Reserva r ORDER BY r.data ASC, r.horaInicial ASC")
 	List<Reserva> findAllOrderByDataAndHoraInicial();

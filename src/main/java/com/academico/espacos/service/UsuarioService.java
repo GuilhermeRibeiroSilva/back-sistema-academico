@@ -64,14 +64,6 @@ public class UsuarioService {
     }
     
     @Transactional
-    public void desativarUsuario(Long usuarioId) {
-        Usuario usuario = usuarioRepository.findById(usuarioId)
-            .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado"));
-        
-        usuarioRepository.delete(usuario);
-    }
-    
-    @Transactional
     public void excluirUsuario(Long usuarioId) {
         Usuario usuario = usuarioRepository.findById(usuarioId)
             .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado"));

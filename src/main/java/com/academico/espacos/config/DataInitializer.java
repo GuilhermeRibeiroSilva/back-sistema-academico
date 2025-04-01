@@ -26,19 +26,27 @@ public class DataInitializer {
     @Bean
     public CommandLineRunner initData() {
         return args -> {
-            // Verifica se já existe um usuário admin
-            if (usuarioRepository.findByUsername("admin@admin.com").isEmpty()) {
-                // Cria o usuário admin
-                Usuario admin = new Usuario();
-                admin.setUsername("admin@admin.com");
-                admin.setPassword(passwordEncoder.encode("admin123"));
-                admin.setRole("ROLE_ADMIN");
-                
-                usuarioRepository.save(admin);
-                
-                System.out.println("Usuário admin criado com sucesso!");
-                System.out.println("Username: admin@admin.com");
-                System.out.println("Senha: admin123");
+            try {
+                // Verifica se já existe um usuário admin
+                if (usuarioRepository.findByUsername("admin@admin.com").isEmpty()) {
+                    // Cria o usuário admin
+                    Usuario admin = new Usuario();
+                    admin.setUsername("admin@admin.com");
+                    admin.setPassword(passwordEncoder.encode("admin123"));
+                    admin.setRole("ROLE_ADMIN");
+                    
+                    usuarioRepository.save(admin);
+                    
+                    System.out.println("Usuário admin criado com sucesso!");
+                    System.out.println("Username: admin@admin.com");
+                    System.out.println("Senha: admin123");
+                } else {
+                    System.out.println("Usuário admin já existe, pulando criação.");
+                }
+            } catch (Exception e) {
+                System.err.println("Erro ao inicializar dados: " + e.getMessage());
+                // Se quiser que a aplicação falhe ao iniciar em caso de erro:
+                // throw e;
             }
         };
     }

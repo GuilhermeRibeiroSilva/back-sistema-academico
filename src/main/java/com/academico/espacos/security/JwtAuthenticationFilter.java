@@ -13,6 +13,8 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
 
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
@@ -38,8 +40,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             }
+        } catch (ExpiredJwtException ex) {
+            logger.warn("Token JWT expirado: " + ex.getMessage());
+        } catch (JwtException ex) {
+            logger.warn("Token JWT inválido: " + ex.getMessage());
         } catch (Exception ex) {
-            logger.error("Não foi possível autenticar o usuário", ex);
+            logger.error("Não foi possível configurar a autenticação: " + ex.getMessage(), ex);
         }
 
         filterChain.doFilter(request, response);
