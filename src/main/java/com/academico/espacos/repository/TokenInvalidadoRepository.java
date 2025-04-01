@@ -8,12 +8,14 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Date;
+import java.util.Optional;
 
 public interface TokenInvalidadoRepository extends JpaRepository<TokenInvalidado, Long> {
-    boolean existsByToken(String token);
-
+    Optional<TokenInvalidado> findByToken(String token);
+    
     @Modifying
     @Transactional
-    @Query("DELETE FROM TokenInvalidado t WHERE t.dataExpiracao < :agora")
-    void limparTokensExpirados(@Param("agora") LocalDateTime agora);
+    @Query("DELETE FROM TokenInvalidado t WHERE t.expiracaoToken < :agora")
+    void limparTokensExpirados(@Param("agora") Date agora);
 }

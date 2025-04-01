@@ -16,6 +16,7 @@ import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.Date;
+import java.time.ZoneId;
 
 @Service
 public class AuthService {
@@ -44,6 +45,26 @@ public class AuthService {
         }
 
         return usuario;
+    }
+
+    @Transactional
+    public LoginResponse login(LoginRequest request) {
+        Usuario usuario = autenticar(request.getUsername(), request.getPassword());
+        String token = jwtTokenProvider.gerarToken(usuario);
+        
+        LoginResponse response = new LoginResponse();
+        response.setToken(token);
+        response.setId(usuario.getId());
+        response.setUsername(usuario.getUsername());
+        response.setRole(usuario.getRole());
+        
+        // Adicionar informações do professor apenas se o usuário for professor
+        if (usuario.isProfessor() && usuario.getProfessor() != null) {
+            response.setProfessorId(usuario.getProfessor().getId());
+            response.setProfessorNome(usuario.getProfessor().getNome());
+        }
+        
+        return response;
     }
 
     @Transactional
@@ -86,29 +107,26 @@ public class AuthService {
         usuarioRepository.save(usuario);
     }
 
-
-    @Transactional
-    public void logout(String token) {
-        TokenInvalidado tokenInvalidado = new TokenInvalidado();
-        tokenInvalidado.setToken(token);
-        tokenInvalidado.setDataInvalidacao(LocalDateTime.now());
-        // Obter a data de expiração do token para limpar posteriormente
-        Date expiracao = jwtTokenProvider.getExpirationDateFromToken(token);
-        tokenInvalidado.setDataExpiracao(expiracao.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDateTime());
-        tokenInvalidadoRepository.save(tokenInvalidado);
-        
-        limparTokensExpirados();
-    }
-
-    @Scheduled(cron = "0 0 * * * *") // Executa a cada hora
-    public void limparTokensExpirados() {
-        tokenInvalidadoRepository.limparTokensExpirados(LocalDateTime.now());
-    }
-
     private void validarNovoUsername(String username) {
         if (usuarioRepository.findByUsername(username).isPresent()) {
             throw new AuthenticationException("Username já existe");
         }
+    }
+
+    @Transactional
+    public void logout(String token) {
+        if (token != null && !token.isEmpty()) {
+            TokenInvalidado tokenInvalidado = new TokenInvalidado();
+            tokenInvalidado.setToken(token);
+            tokenInvalidado.setExpiracaoToken(jwtTokenProvider.getExpiracaoToken(token));
+            tokenInvalidadoRepository.save(tokenInvalidado);
+        }
+    }
+
+    @Scheduled(cron = "0 0 * * * *") // Executa a cada hora
+    public void limparTokensExpirados() {
+        Date agora = Date.from(LocalDateTime.now().atZone(ZoneId.systemDefault()).toInstant());
+        tokenInvalidadoRepository.limparTokensExpirados(agora);
     }
 
     public boolean isAdmin(Usuario usuario) {
@@ -117,25 +135,5 @@ public class AuthService {
 
     public boolean isProfessor(Usuario usuario) {
         return "ROLE_PROFESSOR".equals(usuario.getRole());
-    }
-
-    @Transactional
-    public LoginResponse login(LoginRequest request) {
-        Usuario usuario = autenticar(request.getUsername(), request.getPassword());
-        String token = jwtTokenProvider.gerarToken(usuario);
-        
-        LoginResponse response = new LoginResponse();
-        response.setToken(token);
-        response.setId(usuario.getId());
-        response.setUsername(usuario.getUsername());
-        response.setRole(usuario.getRole());
-        
-        // Adicionar informações do professor se aplicável
-        if (isProfessor(usuario) && usuario.getProfessor() != null) {
-            response.setProfessorId(usuario.getProfessor().getId());
-            response.setProfessorNome(usuario.getProfessor().getNome());
-        }
-        
-        return response;
     }
 }

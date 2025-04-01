@@ -9,13 +9,17 @@ import com.academico.espacos.model.Reserva;
 import com.academico.espacos.model.Reserva.StatusReserva;
 import com.academico.espacos.model.EspacoAcademico;
 import com.academico.espacos.model.Usuario;
+import com.academico.espacos.model.Professor;
 import com.academico.espacos.repository.ReservaRepository;
 import com.academico.espacos.repository.EspacoAcademicoRepository;
 import com.academico.espacos.repository.UsuarioRepository;
+import com.academico.espacos.repository.ProfessorRepository;
 import com.academico.espacos.exception.ResourceNotFoundException;
 import com.academico.espacos.exception.ReservaConflitanteException;
+import com.academico.espacos.security.JwtTokenProvider;
 import java.util.List;
 import java.util.Optional;
+import java.util.ArrayList;
 import java.util.stream.Collectors;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -32,6 +36,12 @@ public class ReservaService {
 
 	@Autowired
 	private UsuarioRepository usuarioRepository;
+
+	@Autowired
+	private ProfessorRepository professorRepository;
+
+	@Autowired
+	private JwtTokenProvider jwtTokenProvider;
 
 	// Centralizar validações
 	private void validarReserva(Reserva reserva, boolean isUpdate) {
@@ -92,8 +102,33 @@ public class ReservaService {
 	}
 
 	// Usar nas funções existentes
-	public Reserva solicitar(Reserva reserva) {
+	@Transactional
+	public Reserva solicitar(Reserva reserva, Usuario usuarioAtual) {
+		// Validações básicas
 		validarReserva(reserva, false);
+		
+		// Se for professor, forçar que a reserva seja para ele mesmo
+		if (usuarioAtual.isProfessor()) {
+			if (!usuarioAtual.isOwner(reserva.getProfessor())) {
+				throw new AccessDeniedException("Professores só podem fazer reservas para si mesmos");
+			}
+		}
+		
+		// Verificar conflitos
+		validarConflitos(reserva);
+		
+		// Buscar entidades completas
+		EspacoAcademico espaco = espacoRepository.findById(reserva.getEspacoAcademico().getId())
+			.orElseThrow(() -> new ResourceNotFoundException("Espaço Acadêmico não encontrado"));
+			
+		Professor professor = professorRepository.findById(reserva.getProfessor().getId())
+			.orElseThrow(() -> new ResourceNotFoundException("Professor não encontrado"));
+		
+		// Status inicial é PENDENTE para todos os usuários
+		reserva.setStatus(StatusReserva.PENDENTE);
+		reserva.setEspacoAcademico(espaco);
+		reserva.setProfessor(professor);
+		
 		return repository.save(reserva);
 	}
 
@@ -199,31 +234,27 @@ public class ReservaService {
 		return repository.findByProfessorId(professorId);
 	}
 
-	public void cancelarReserva(Long id) {
+	@Transactional
+	public void cancelarReserva(Long id, Usuario usuarioAtual) {
 		Reserva reserva = repository.findById(id)
-				.orElseThrow(() -> new ResourceNotFoundException("Reserva não encontrada com id: " + id));
-
-		// Verificar se a reserva já foi utilizada
-		if (reserva.getStatus() == StatusReserva.UTILIZADO) {
-			throw new IllegalStateException("Não é possível cancelar uma reserva já utilizada");
+			.orElseThrow(() -> new ResourceNotFoundException("Reserva não encontrada"));
+		
+		// Verificar permissão
+		if (!usuarioAtual.canAccess(reserva)) {
+			throw new AccessDeniedException("Sem permissão para acessar esta reserva");
 		}
-
-		// Verificar se a reserva já está em uso
-		if (reserva.getStatus() == StatusReserva.EM_USO) {
-			throw new IllegalStateException("Não é possível cancelar uma reserva que já está em uso");
-		}
-
-		// Verificar se a reserva está a menos de 30 minutos do início
-		LocalDateTime agora = LocalDateTime.now();
-		LocalDateTime horarioReserva = LocalDateTime.of(reserva.getData(), reserva.getHoraInicial());
-
-		if (agora.isAfter(horarioReserva.minusMinutes(30))) {
+		
+		// Não permitir cancelar reservas já concluídas ou já canceladas
+		if (reserva.getStatus() == StatusReserva.UTILIZADO || 
+			reserva.getStatus() == StatusReserva.CANCELADA) {
 			throw new IllegalStateException(
-					"Não é possível cancelar uma reserva com menos de 30 minutos de antecedência");
+				"Não é possível cancelar uma reserva que já foi " + 
+				(reserva.getStatus() == StatusReserva.UTILIZADO ? "utilizada" : "cancelada")
+			);
 		}
-
-		// Excluir a reserva em vez de marcar como cancelada
-		repository.delete(reserva);
+		
+		reserva.setStatus(StatusReserva.CANCELADA);
+		repository.save(reserva);
 	}
 
 	private void validarConflitos(Reserva reserva) {
@@ -258,10 +289,21 @@ public class ReservaService {
 	}
 
 	public List<Reserva> listarReservas(Usuario usuarioAtual) {
+		if (usuarioAtual == null) {
+			throw new IllegalArgumentException("Usuário não informado");
+		}
+		
+		// Admin vê todas as reservas
 		if (usuarioAtual.isAdmin()) {
 			return repository.findAll();
-		} else {
+		} 
+		// Professor vê apenas suas próprias reservas
+		else if (usuarioAtual.isProfessor() && usuarioAtual.getProfessor() != null) {
 			return repository.findByProfessorId(usuarioAtual.getProfessor().getId());
+		} 
+		// Caso improvável, mas para garantir
+		else {
+			return new ArrayList<>();
 		}
 	}
 

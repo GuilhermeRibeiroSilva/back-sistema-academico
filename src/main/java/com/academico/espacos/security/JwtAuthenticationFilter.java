@@ -28,10 +28,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         try {
-            String jwt = getJwtFromRequest(request);
-
+            String jwt = extractJwtFromRequest(request);
             if (StringUtils.hasText(jwt) && tokenProvider.validateToken(jwt)) {
                 String username = tokenProvider.getUsernameFromToken(jwt);
+                Long userId = tokenProvider.getUserIdFromToken(jwt);
+                
                 UserDetails userDetails = customUserDetailsService.loadUserByUsername(username);
                 
                 UsernamePasswordAuthenticationToken authentication = 
@@ -45,13 +46,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         } catch (JwtException ex) {
             logger.warn("Token JWT inválido: " + ex.getMessage());
         } catch (Exception ex) {
-            logger.error("Não foi possível configurar a autenticação: " + ex.getMessage(), ex);
+            logger.error("Não foi possível autenticar o usuário", ex);
         }
 
         filterChain.doFilter(request, response);
     }
 
-    private String getJwtFromRequest(HttpServletRequest request) {
+    private String extractJwtFromRequest(HttpServletRequest request) {
         String bearerToken = request.getHeader("Authorization");
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
             return bearerToken.substring(7);

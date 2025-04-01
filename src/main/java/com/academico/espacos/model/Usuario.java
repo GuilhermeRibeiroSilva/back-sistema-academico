@@ -63,21 +63,27 @@ public class Usuario {
         this.professor = professor;
     }
 
-    // Novo método para verificar propriedade dos dados
-    public boolean isOwner(Professor professor) {
-        return this.professor != null && this.professor.getId().equals(professor.getId());
-    }
-
-    public boolean canAccess(Reserva reserva) {
-        return isAdmin() || 
-               (isProfessor() && reserva.getProfessor().getId().equals(this.professor.getId()));
-    }
-
+    // Métodos de verificação de autorização
     public boolean isAdmin() {
         return "ROLE_ADMIN".equals(this.role);
     }
 
     public boolean isProfessor() {
         return "ROLE_PROFESSOR".equals(this.role);
+    }
+
+    // Verificação de propriedade de dados
+    public boolean isOwner(Professor professor) {
+        return this.professor != null && this.professor.getId().equals(professor.getId());
+    }
+
+    // Verifica se tem acesso a uma reserva específica
+    public boolean canAccess(Reserva reserva) {
+        // Admins podem acessar qualquer reserva
+        // Professores só acessam suas próprias reservas
+        return isAdmin() || 
+               (isProfessor() && professor != null && 
+                reserva.getProfessor() != null && 
+                reserva.getProfessor().getId().equals(professor.getId()));
     }
 }
