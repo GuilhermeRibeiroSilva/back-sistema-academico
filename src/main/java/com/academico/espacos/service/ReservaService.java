@@ -24,6 +24,7 @@ import java.util.stream.Collectors;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
 
 @Service
 public class ReservaService {
@@ -150,50 +151,106 @@ public class ReservaService {
 		return repository.save(reserva);
 	}
 
-	@Scheduled(fixedRate = 60000) // Executa a cada minuto
+	@Scheduled(fixedRate = 60000) // A cada minuto
 	@Transactional
 	public void atualizarStatusReservasAutomaticamente() {
 		LocalDateTime agora = LocalDateTime.now();
 		LocalDate hoje = agora.toLocalDate();
 		LocalTime horaAtual = agora.toLocalTime();
-
-		// Busca reservas pendentes do dia
-		List<Reserva> reservasDoDia = repository.findByDataAndStatus(hoje, StatusReserva.PENDENTE);
-
-		for (Reserva reserva : reservasDoDia) {
-			// Atualiza para EM_USO se estiver no horário
-			if (horaAtual.isAfter(reserva.getHoraInicial()) && horaAtual.isBefore(reserva.getHoraFinal())) {
+		
+		// Buscar todas as reservas não canceladas do dia atual e futuros próximos
+		List<Reserva> reservasAtivas = repository.findByStatusNot(StatusReserva.CANCELADO);
+		
+		for (Reserva reserva : reservasAtivas) {
+			// Pular reservas já utilizadas (concluídas)
+			if (reserva.getStatus() == StatusReserva.UTILIZADO) {
+				continue;
+			}
+			
+			// Verificar se deve ser marcada como EM_USO
+			if (reserva.getData().equals(hoje) && 
+				horaAtual.isAfter(reserva.getHoraInicial()) && 
+				horaAtual.isBefore(reserva.getHoraFinal())) {
+				
 				reserva.setStatus(StatusReserva.EM_USO);
 				repository.save(reserva);
+				continue;
 			}
-
-			// Atualiza para UTILIZADO se passou do horário e não foi confirmado
-			if (horaAtual.isAfter(reserva.getHoraFinal())) {
-				reserva.setStatus(StatusReserva.UTILIZADO);
-				repository.save(reserva);
-			}
-		}
-
-		// Atualiza reservas EM_USO que já passaram do horário
-		List<Reserva> reservasEmUso = repository.findByDataAndStatus(hoje, StatusReserva.EM_USO);
-		for (Reserva reserva : reservasEmUso) {
-			if (horaAtual.isAfter(reserva.getHoraFinal())) {
+			
+			// Verificar se deve ser marcada como UTILIZADO (passou do horário final)
+			LocalDateTime dataHoraFinal = LocalDateTime.of(reserva.getData(), reserva.getHoraFinal());
+			if (agora.isAfter(dataHoraFinal)) {
 				reserva.setStatus(StatusReserva.UTILIZADO);
 				repository.save(reserva);
 			}
 		}
 	}
 
-	public void confirmarUtilizacao(Long id) {
+	@Transactional
+	public void cancelarReserva(Long id, Usuario usuarioAtual) {
 		Reserva reserva = repository.findById(id)
-				.orElseThrow(() -> new ResourceNotFoundException("Reserva não encontrada"));
-
-		// Add proper validation
-		if (reserva.getStatus() == StatusReserva.UTILIZADO) {
-			throw new IllegalStateException("Reserva já foi confirmada como utilizada");
+			.orElseThrow(() -> new ResourceNotFoundException("Reserva não encontrada"));
+		
+		// Verificar permissão
+		if (!usuarioAtual.canAccess(reserva)) {
+			throw new AccessDeniedException("Sem permissão para cancelar esta reserva");
 		}
+		
+		// Verificar se não pode mais ser cancelada (já utilizada ou em andamento)
+		if (reserva.getStatus() == StatusReserva.UTILIZADO) {
+			throw new IllegalStateException("Não é possível cancelar uma reserva já utilizada");
+		}
+		
+		// Verificar se está a menos de 30 minutos do início
+		LocalDateTime agora = LocalDateTime.now();
+		LocalDateTime horaInicio = LocalDateTime.of(reserva.getData(), reserva.getHoraInicial());
+		
+		long minutosAteInicio = ChronoUnit.MINUTES.between(agora, horaInicio);
+		if (minutosAteInicio < 30 && minutosAteInicio > 0) {
+			throw new IllegalStateException("Não é possível cancelar reservas com menos de 30 minutos de antecedência");
+		}
+		
+		// IMPORTANTE: Mudamos para CANCELADO em vez de excluir
+		reserva.setStatus(StatusReserva.CANCELADO);
+		repository.save(reserva);
+	}
 
-		// Update status
+	public boolean reservaPodeSerEditada(Long id) {
+		Reserva reserva = repository.findById(id)
+			.orElseThrow(() -> new ResourceNotFoundException("Reserva não encontrada"));
+			
+		// Não pode editar se já foi utilizada ou cancelada
+		if (reserva.getStatus() == StatusReserva.UTILIZADO || 
+			reserva.getStatus() == StatusReserva.CANCELADO) {
+			return false;
+		}
+		
+		// Verificar se está a mais de 30 minutos do início
+		LocalDateTime agora = LocalDateTime.now();
+		LocalDateTime horaInicio = LocalDateTime.of(reserva.getData(), reserva.getHoraInicial());
+		
+		return ChronoUnit.MINUTES.between(agora, horaInicio) >= 30;
+	}
+
+	@Transactional
+	public void confirmarUtilizacao(Long id, Usuario usuarioAtual) {
+		Reserva reserva = repository.findById(id)
+			.orElseThrow(() -> new ResourceNotFoundException("Reserva não encontrada"));
+			
+		// Verificar permissão
+		if (!usuarioAtual.canAccess(reserva)) {
+			throw new AccessDeniedException("Sem permissão para confirmar esta reserva");
+		}
+		
+		// Verificar se está em uso
+		LocalDateTime agora = LocalDateTime.now();
+		LocalDateTime horaInicio = LocalDateTime.of(reserva.getData(), reserva.getHoraInicial());
+		LocalDateTime horaFim = LocalDateTime.of(reserva.getData(), reserva.getHoraFinal());
+		
+		if (!(agora.isAfter(horaInicio) && agora.isBefore(horaFim))) {
+			throw new IllegalStateException("Só é possível confirmar a utilização durante o período reservado");
+		}
+		
 		reserva.setStatus(StatusReserva.UTILIZADO);
 		reserva.setUtilizado(true);
 		repository.save(reserva);
@@ -208,7 +265,7 @@ public class ReservaService {
 
 		for (Reserva reserva : reservas) {
 			// Pular reservas canceladas
-			if (reserva.getStatus() == StatusReserva.CANCELADA) {
+			if (reserva.getStatus() == StatusReserva.CANCELADO) {
 				continue;
 			}
 
@@ -234,77 +291,21 @@ public class ReservaService {
 		return repository.findByProfessorId(professorId);
 	}
 
-	@Transactional
-	public void cancelarReserva(Long id, Usuario usuarioAtual) {
-		Reserva reserva = repository.findById(id)
-			.orElseThrow(() -> new ResourceNotFoundException("Reserva não encontrada"));
-		
-		// Verificar permissão
-		if (!usuarioAtual.canAccess(reserva)) {
-			throw new AccessDeniedException("Sem permissão para acessar esta reserva");
-		}
-		
-		// Não permitir cancelar reservas já concluídas ou já canceladas
-		if (reserva.getStatus() == StatusReserva.UTILIZADO || 
-			reserva.getStatus() == StatusReserva.CANCELADA) {
-			throw new IllegalStateException(
-				"Não é possível cancelar uma reserva que já foi " + 
-				(reserva.getStatus() == StatusReserva.UTILIZADO ? "utilizada" : "cancelada")
-			);
-		}
-		
-		reserva.setStatus(StatusReserva.CANCELADA);
-		repository.save(reserva);
-	}
-
-	private void validarConflitos(Reserva reserva) {
-		List<Reserva> conflitantes = repository.findReservasConflitantes(reserva.getEspacoAcademico().getId(),
-				reserva.getData(), reserva.getHoraInicial(), reserva.getHoraFinal());
-
-		// Remove a própria reserva da lista de conflitos (caso seja uma atualização)
-		conflitantes = conflitantes.stream().filter(r -> !r.getId().equals(reserva.getId()))
-				.filter(r -> r.getStatus() != StatusReserva.CANCELADA).collect(Collectors.toList());
-
-		if (!conflitantes.isEmpty()) {
-			throw new ReservaConflitanteException("Já existe uma reserva para este espaço neste horário");
-		}
-	}
-
-	@Transactional
-	public void atualizarStatusReserva(Long id, StatusReserva novoStatus) {
-		Reserva reserva = repository.findById(id)
-				.orElseThrow(() -> new ResourceNotFoundException("Reserva não encontrada"));
-
-		// Validações de transição de status
-		if (reserva.getStatus() == StatusReserva.CANCELADA) {
-			throw new IllegalStateException("Não é possível alterar o status de uma reserva cancelada");
-		}
-
-		if (reserva.getStatus() == StatusReserva.UTILIZADO && novoStatus != StatusReserva.CANCELADA) {
-			throw new IllegalStateException("Não é possível alterar o status de uma reserva já utilizada");
-		}
-
-		reserva.setStatus(novoStatus);
-		repository.save(reserva);
-	}
-
 	public List<Reserva> listarReservas(Usuario usuarioAtual) {
-		if (usuarioAtual == null) {
-			throw new IllegalArgumentException("Usuário não informado");
-		}
+		List<Reserva> reservas;
 		
-		// Admin vê todas as reservas
 		if (usuarioAtual.isAdmin()) {
-			return repository.findAll();
-		} 
-		// Professor vê apenas suas próprias reservas
-		else if (usuarioAtual.isProfessor() && usuarioAtual.getProfessor() != null) {
-			return repository.findByProfessorId(usuarioAtual.getProfessor().getId());
-		} 
-		// Caso improvável, mas para garantir
-		else {
+			reservas = repository.findAll();
+		} else if (usuarioAtual.isProfessor()) {
+			reservas = repository.findByProfessorId(usuarioAtual.getProfessor().getId());
+		} else {
 			return new ArrayList<>();
 		}
+		
+		// Filtrar reservas canceladas - importante!
+		return reservas.stream()
+			.filter(r -> r.getStatus() != StatusReserva.CANCELADO)
+			.collect(Collectors.toList());
 	}
 
 	@Transactional
@@ -317,5 +318,36 @@ public class ReservaService {
 		}
 
 		repository.delete(reserva);
+	}
+
+	private void validarConflitos(Reserva reserva) {
+		List<Reserva> conflitantes = repository.findReservasConflitantes(reserva.getEspacoAcademico().getId(),
+				reserva.getData(), reserva.getHoraInicial(), reserva.getHoraFinal());
+
+		// Remove a própria reserva da lista de conflitos (caso seja uma atualização)
+		conflitantes = conflitantes.stream().filter(r -> !r.getId().equals(reserva.getId()))
+				.filter(r -> r.getStatus() != StatusReserva.CANCELADO).collect(Collectors.toList());
+
+		if (!conflitantes.isEmpty()) {
+			throw new ReservaConflitanteException("Já existe uma reserva para este espaço neste horário");
+		}
+	}
+
+	@Transactional
+	public void atualizarStatusReserva(Long id, StatusReserva novoStatus) {
+		Reserva reserva = repository.findById(id)
+				.orElseThrow(() -> new ResourceNotFoundException("Reserva não encontrada"));
+
+		// Validações de transição de status
+		if (reserva.getStatus() == StatusReserva.CANCELADO) {
+			throw new IllegalStateException("Não é possível alterar o status de uma reserva cancelada");
+		}
+
+		if (reserva.getStatus() == StatusReserva.UTILIZADO && novoStatus != StatusReserva.CANCELADO) {
+			throw new IllegalStateException("Não é possível alterar o status de uma reserva já utilizada");
+		}
+
+		reserva.setStatus(novoStatus);
+		repository.save(reserva);
 	}
 }

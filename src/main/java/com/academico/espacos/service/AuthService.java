@@ -116,10 +116,21 @@ public class AuthService {
     @Transactional
     public void logout(String token) {
         if (token != null && !token.isEmpty()) {
-            TokenInvalidado tokenInvalidado = new TokenInvalidado();
-            tokenInvalidado.setToken(token);
-            tokenInvalidado.setExpiracaoToken(jwtTokenProvider.getExpiracaoToken(token));
-            tokenInvalidadoRepository.save(tokenInvalidado);
+            try {
+                // Verificar se o token já existe na base antes de tentar inserir
+                boolean tokenJaExiste = tokenInvalidadoRepository.existsByToken(token);
+                
+                if (!tokenJaExiste) {
+                    TokenInvalidado tokenInvalidado = new TokenInvalidado();
+                    tokenInvalidado.setToken(token);
+                    tokenInvalidado.setExpiracaoToken(jwtTokenProvider.getExpiracaoToken(token));
+                    tokenInvalidadoRepository.save(tokenInvalidado);
+                }
+            } catch (Exception e) {
+                // Log detalhado do erro, mas sem falhar o processo de logout
+                System.err.println("Erro ao salvar token invalidado: " + e.getMessage());
+                // Continuar com o processo de logout mesmo em caso de falha no salvamento do token
+            }
         }
     }
 

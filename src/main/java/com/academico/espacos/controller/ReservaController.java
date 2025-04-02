@@ -127,18 +127,40 @@ public class ReservaController {
 
     @PatchMapping("/{id}/confirmar")
     @PreAuthorize("hasAnyRole('ADMIN', 'PROFESSOR')")
-    public ResponseEntity<?> confirmarUtilizacao(@PathVariable Long id) {
+    public ResponseEntity<?> confirmarUtilizacao(@PathVariable Long id, 
+                                               @RequestHeader("Authorization") String authHeader) {
         try {
-            service.confirmarUtilizacao(id);
+            String token = authHeader.substring(7);
+            Usuario usuarioAtual = jwtTokenProvider.getUsuarioFromToken(token);
+            
+            service.confirmarUtilizacao(id, usuarioAtual);
             return ResponseEntity.ok().build();
         } catch (ResourceNotFoundException e) {
             return ResponseEntity.notFound().build();
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ErrorResponse(e.getMessage()));
         } catch (IllegalStateException e) {
-            return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
+            return ResponseEntity.badRequest()
+                .body(new ErrorResponse(e.getMessage()));
         } catch (Exception e) {
             logger.error("Erro ao confirmar utilização: ", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ErrorResponse("Erro interno do servidor"));
+        }
+    }
+
+    @GetMapping("/{id}/pode-editar")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROFESSOR')")
+    public ResponseEntity<Boolean> verificarPodeEditar(@PathVariable Long id) {
+        try {
+            boolean podeEditar = service.reservaPodeSerEditada(id);
+            return ResponseEntity.ok(podeEditar);
+        } catch (ResourceNotFoundException e) {
+            return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            logger.error("Erro ao verificar se reserva pode ser editada: ", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 }

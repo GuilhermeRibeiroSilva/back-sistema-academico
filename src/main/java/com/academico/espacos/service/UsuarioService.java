@@ -30,6 +30,9 @@ public class UsuarioService {
     
     @Transactional
     public Usuario criarUsuarioProfessor(String username, String password, Long professorId) {
+        // Log para debug
+        System.out.println("Criando usuário professor: " + username + ", Professor ID: " + professorId);
+        
         // Verifica se o username já existe
         if (usuarioRepository.findByUsername(username).isPresent()) {
             throw new IllegalArgumentException("Username já existe");
@@ -37,7 +40,7 @@ public class UsuarioService {
         
         // Busca o professor pelo ID
         Professor professor = professorRepository.findById(professorId)
-            .orElseThrow(() -> new ResourceNotFoundException("Professor não encontrado"));
+            .orElseThrow(() -> new ResourceNotFoundException("Professor não encontrado com ID: " + professorId));
         
         // Verifica se o professor já tem um usuário
         if (usuarioRepository.findByProfessor(professor).isPresent()) {

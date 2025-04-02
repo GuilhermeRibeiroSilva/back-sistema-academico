@@ -40,7 +40,7 @@ public class UsuarioController {
         return ResponseEntity.ok(response);
     }
     
-    @PostMapping
+    @PostMapping("/professor")
     public ResponseEntity<?> criarUsuarioProfessor(@RequestBody CriarUsuarioProfessorRequest request) {
         try {
             Usuario usuario = usuarioService.criarUsuarioProfessor(

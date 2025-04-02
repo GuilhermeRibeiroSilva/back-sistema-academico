@@ -5,6 +5,8 @@ public class CriarUsuarioProfessorRequest {
     private String password;
     private Long professorId;
     
+    public CriarUsuarioProfessorRequest() {}
+    
     public String getUsername() {
         return username;
     }

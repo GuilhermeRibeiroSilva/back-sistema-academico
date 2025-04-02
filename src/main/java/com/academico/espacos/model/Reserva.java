@@ -100,10 +100,9 @@ public class Reserva {
     }
     
     public enum StatusReserva {
-        PENDENTE,
-        CONFIRMADA,
-        EM_USO,    
-        UTILIZADO,
-        CANCELADA
+        PENDENTE,    // Reserva agendada mas ainda não iniciou
+        EM_USO,      // Reserva em progresso (horário atual entre início e fim)
+        UTILIZADO,   // Reserva concluída (confirmada ou passou do horário)
+        CANCELADO    // Reserva foi cancelada pelo usuário
     }
 }

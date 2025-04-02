@@ -14,6 +14,9 @@ import java.util.Optional;
 public interface TokenInvalidadoRepository extends JpaRepository<TokenInvalidado, Long> {
     Optional<TokenInvalidado> findByToken(String token);
     
+    // Adicionar este método para verificar se o token já existe
+    boolean existsByToken(String token);
+    
     @Modifying
     @Transactional
     @Query("DELETE FROM TokenInvalidado t WHERE t.expiracaoToken < :agora")

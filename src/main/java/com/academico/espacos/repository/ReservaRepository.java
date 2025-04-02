@@ -22,17 +22,14 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
 	       "AND r.status != 'CANCELADO'")
 	List<Reserva> findReservasConflitantes(@Param("espacoId") Long espacoId, @Param("data") LocalDate data, @Param("horaInicial") LocalTime horaInicial, @Param("horaFinal") LocalTime horaFinal);
 
+	// Método que aceita strings para horários
 	@Query("SELECT r FROM Reserva r WHERE r.espacoAcademico.id = :espacoId " + 
 	       "AND r.data = :data " +
-	       "AND r.horaInicial < FUNCTION('TIME', :horaFinal) " +
-	       "AND r.horaFinal > FUNCTION('TIME', :horaInicial) " + 
+	       "AND r.horaInicial < FUNCTION('STR_TO_DATE', :horaFinal, '%H:%i') " +
+	       "AND r.horaFinal > FUNCTION('STR_TO_DATE', :horaInicial, '%H:%i') " + 
 	       "AND r.status != 'CANCELADO'")
-	List<Reserva> findConflictingReservations(
-	    @Param("espacoId") Long espacoId, 
-	    @Param("data") LocalDate data, 
-	    @Param("horaInicial") String horaInicial, 
-	    @Param("horaFinal") String horaFinal
-	);
+	List<Reserva> findConflictingReservations(@Param("espacoId") Long espacoId, @Param("data") LocalDate data, @Param("horaInicial") String horaInicial, @Param("horaFinal") String horaFinal);
+
 
 	@Query("SELECT r FROM Reserva r ORDER BY r.data ASC, r.horaInicial ASC")
 	List<Reserva> findAllOrderByDataAndHoraInicial();
@@ -54,5 +51,12 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
 	@Query("UPDATE Reserva r SET r.status = :novoStatus WHERE r.id = :id")
 	@Modifying
 	void atualizarStatus(@Param("id") Long id, @Param("novoStatus") StatusReserva novoStatus);
+
+	// Adicionar método para encontrar reservas por status diferente de um valor
+	List<Reserva> findByStatusNot(StatusReserva status);
+	
+	// Método para encontrar reservas ativas (não canceladas)
+	@Query("SELECT r FROM Reserva r WHERE r.status != 'CANCELADO' ORDER BY r.data ASC, r.horaInicial ASC")
+	List<Reserva> findAllActiveOrderedByDateTime();
 
 }
