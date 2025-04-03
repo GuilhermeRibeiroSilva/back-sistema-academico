@@ -18,6 +18,7 @@ import com.academico.espacos.repository.ProfessorRepository;
 import com.academico.espacos.exception.ResourceNotFoundException;
 import com.academico.espacos.exception.ReservaConflitanteException;
 import com.academico.espacos.security.JwtTokenProvider;
+import jakarta.persistence.EntityManager;
 import java.util.List;
 import java.util.Optional;
 import java.util.ArrayList;
@@ -28,6 +29,7 @@ import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.TreeMap;
+import java.time.format.DateTimeFormatter;
 
 @Service
 public class ReservaService {
@@ -47,62 +49,87 @@ public class ReservaService {
 	@Autowired
 	private JwtTokenProvider jwtTokenProvider;
 
+	@Autowired
+	private EntityManager entityManager;
+
+	// Substitua a chamada ao findConflictingReservations por este método
+	private List<Reserva> verificarReservasConflitantes(Long espacoId, LocalDate data, 
+	                                                  LocalTime horaInicial, LocalTime horaFinal) {
+	    // Buscar todas as reservas ativas para o espaço na data especificada
+	    String jpql = "SELECT r FROM Reserva r " +
+	                  "WHERE r.espacoAcademico.id = :espacoId " +
+	                  "AND r.data = :data " +
+	                  "AND r.status <> :statusCancelado";
+	                  
+	    List<Reserva> reservasNaData = entityManager.createQuery(jpql, Reserva.class)
+	        .setParameter("espacoId", espacoId)
+	        .setParameter("data", data)
+	        .setParameter("statusCancelado", StatusReserva.CANCELADO)
+	        .getResultList();
+	    
+	    // Filtrar manualmente as reservas que conflitam com o horário
+	    return reservasNaData.stream()
+	        .filter(r -> {
+	            // Verifica se há sobreposição de horários
+	            return !(r.getHoraFinal().isBefore(horaInicial) || r.getHoraInicial().isAfter(horaFinal));
+	        })
+	        .collect(Collectors.toList());
+	}
+
 	// Centralizar validações
 	private void validarReserva(Reserva reserva, boolean isUpdate) {
-		// Verificar campos obrigatórios
-		if (reserva.getEspacoAcademico() == null || reserva.getEspacoAcademico().getId() == null) {
-			throw new IllegalArgumentException("Espaço Acadêmico é obrigatório");
-		}
-
-		if (reserva.getProfessor() == null || reserva.getProfessor().getId() == null) {
-			throw new IllegalArgumentException("Professor é obrigatório");
-		}
-
-		if (reserva.getData() == null) {
-			throw new IllegalArgumentException("Data é obrigatória");
-		}
-
-		if (reserva.getHoraInicial() == null || reserva.getHoraFinal() == null) {
-			throw new IllegalArgumentException("Horários são obrigatórios");
-		}
-
-		// Validar se a data não é passada
-		LocalDateTime agora = LocalDateTime.now();
-		LocalDate hoje = agora.toLocalDate();
-
-		if (reserva.getData().isBefore(hoje)) {
-			throw new IllegalArgumentException("Não é possível fazer reservas para datas passadas");
-		}
-
-		// Validar horários
-		if (reserva.getHoraFinal().isBefore(reserva.getHoraInicial())) {
-			throw new IllegalArgumentException("Hora final não pode ser anterior à hora inicial");
-		}
-
-		 // Validar espaço disponível
-		EspacoAcademico espaco = espacoRepository.findById(reserva.getEspacoAcademico().getId())
-			.orElseThrow(() -> new ResourceNotFoundException("Espaço Acadêmico não encontrado"));
-
-		if (!espaco.isDisponivel()) {
-			throw new IllegalStateException("Este espaço acadêmico não está disponível para reservas");
-		}
-
-		 // Verificar conflitos (opcionalmente excluindo a própria reserva se for atualização)
-		List<Reserva> reservasConflitantes = repository.findReservasConflitantes(
-			reserva.getEspacoAcademico().getId(),
-			reserva.getData(), 
-			reserva.getHoraInicial(), 
-			reserva.getHoraFinal());
-
-		if (isUpdate) {
-			reservasConflitantes = reservasConflitantes.stream()
-				.filter(r -> !r.getId().equals(reserva.getId()))
-				.collect(Collectors.toList());
-		}
-
-		if (!reservasConflitantes.isEmpty()) {
-			throw new ReservaConflitanteException("Já existe uma reserva para este horário");
-		}
+	    // Validar se data está preenchida
+	    if (reserva.getData() == null) {
+	        throw new IllegalArgumentException("Data da reserva é obrigatória");
+	    }
+	    
+	    if (reserva.getHoraInicial() == null || reserva.getHoraFinal() == null) {
+	        throw new IllegalArgumentException("Horários de início e fim são obrigatórios");
+	    }
+	    
+	    // Verificar data/hora no futuro
+	    LocalDateTime agora = LocalDateTime.now();
+	    LocalDateTime dataHoraReserva = LocalDateTime.of(reserva.getData(), reserva.getHoraInicial());
+	    
+	    if (dataHoraReserva.isBefore(agora)) {
+	        throw new IllegalArgumentException("Não é possível fazer reservas para datas/horários passados");
+	    }
+	    
+	    // Validar hora final maior que inicial
+	    if (reserva.getHoraFinal().isBefore(reserva.getHoraInicial())) {
+	        throw new IllegalArgumentException("Hora final não pode ser anterior à hora inicial");
+	    }
+	    
+	    // Verificar espaço disponível
+	    if (reserva.getEspacoAcademico() == null || reserva.getEspacoAcademico().getId() == null) {
+	        throw new IllegalArgumentException("Espaço acadêmico é obrigatório");
+	    }
+	    
+	    EspacoAcademico espaco = espacoRepository.findById(reserva.getEspacoAcademico().getId())
+	        .orElseThrow(() -> new ResourceNotFoundException("Espaço Acadêmico não encontrado"));
+	    
+	    if (!espaco.isDisponivel()) {
+	        throw new IllegalArgumentException("Este espaço não está disponível para reservas");
+	    }
+	    
+	    // Verificar conflitos usando o novo método
+	    List<Reserva> reservasConflitantes = verificarReservasConflitantes(
+	        reserva.getEspacoAcademico().getId(),
+	        reserva.getData(),
+	        reserva.getHoraInicial(),
+	        reserva.getHoraFinal()
+	    );
+	    
+	    // Remover a própria reserva da lista de conflitos se for update
+	    if (isUpdate && reserva.getId() != null) {
+	        reservasConflitantes = reservasConflitantes.stream()
+	            .filter(r -> !r.getId().equals(reserva.getId()))
+	            .collect(Collectors.toList());
+	    }
+	    
+	    if (!reservasConflitantes.isEmpty()) {
+	        throw new ReservaConflitanteException("Já existe uma reserva para este horário");
+	    }
 	}
 
 	// Usar nas funções existentes
@@ -163,42 +190,47 @@ public class ReservaService {
 	@Scheduled(fixedRate = 60000) // A cada minuto
 	@Transactional
 	public void atualizarStatusReservasAutomaticamente() {
-		LocalDateTime agora = LocalDateTime.now();
-		LocalDate hoje = agora.toLocalDate();
-		LocalTime horaAtual = agora.toLocalTime();
-		
-		// Buscar todas as reservas não canceladas
-		List<Reserva> reservasAtivas = repository.findByStatusNot(StatusReserva.CANCELADO);
-		
-		for (Reserva reserva : reservasAtivas) {
-			// Pular reservas já utilizadas (concluídas)
-			if (reserva.getStatus() == StatusReserva.UTILIZADO) {
-				continue;
-			}
-			
-			// Melhorar a verificação para marcar como EM_USO
-			if (reserva.getData().equals(hoje) && 
-				horaAtual.isAfter(reserva.getHoraInicial()) && 
-				horaAtual.isBefore(reserva.getHoraFinal())) {
-				
-				// Log para depuração
-				System.out.println("Atualizando reserva #" + reserva.getId() + " para EM_USO");
-				
-				reserva.setStatus(StatusReserva.EM_USO);
-				repository.save(reserva);
-				continue;
-			}
-			
-			// Verificar se deve ser marcada como UTILIZADO (passou do horário final)
-			LocalDateTime dataHoraFinal = LocalDateTime.of(reserva.getData(), reserva.getHoraFinal());
-			if (agora.isAfter(dataHoraFinal)) {
-				// Log para depuração
-				System.out.println("Atualizando reserva #" + reserva.getId() + " para UTILIZADO");
-				
-				reserva.setStatus(StatusReserva.UTILIZADO);
-				repository.save(reserva);
-			}
-		}
+	    try {
+	        LocalDateTime agora = LocalDateTime.now();
+	        
+	        // Log para debug
+	        System.out.println("Executando atualização automática de status: " + agora);
+	        
+	        // Buscar todas as reservas não canceladas
+	        List<Reserva> reservasAtivas = repository.findByStatusNot(StatusReserva.CANCELADO);
+	        System.out.println("Encontradas " + reservasAtivas.size() + " reservas ativas para verificação");
+	        
+	        for (Reserva reserva : reservasAtivas) {
+	            LocalDateTime dataHoraInicio = LocalDateTime.of(reserva.getData(), reserva.getHoraInicial());
+	            LocalDateTime dataHoraFim = LocalDateTime.of(reserva.getData(), reserva.getHoraFinal());
+	            LocalDateTime limiteConfirmacao = dataHoraFim.plusMinutes(30); // 30 minutos após o fim
+	            
+	            StatusReserva statusAtual = reserva.getStatus();
+	            StatusReserva novoStatus = null;
+	            
+	            // Verificar transição específica com base no status atual
+	            if (statusAtual == StatusReserva.PENDENTE && agora.isAfter(dataHoraInicio) && agora.isBefore(dataHoraFim)) {
+	                novoStatus = StatusReserva.EM_USO;
+	            }
+	            else if (statusAtual == StatusReserva.EM_USO && agora.isAfter(dataHoraFim) && agora.isBefore(limiteConfirmacao)) {
+	                novoStatus = StatusReserva.AGUARDANDO_CONFIRMACAO;
+	            }
+	            else if (statusAtual == StatusReserva.AGUARDANDO_CONFIRMACAO && agora.isAfter(limiteConfirmacao)) {
+	                novoStatus = StatusReserva.UTILIZADO;
+	                reserva.setUtilizado(true);
+	            }
+	            
+	            // Se um novo status foi determinado, atualizar
+	            if (novoStatus != null && novoStatus != statusAtual) {
+	                System.out.println("Reserva #" + reserva.getId() + " - Transição: " + statusAtual + " -> " + novoStatus);
+	                reserva.setStatus(novoStatus);
+	                repository.save(reserva);
+	            }
+	        }
+	    } catch (Exception e) {
+	        System.err.println("Erro ao atualizar status das reservas: " + e.getMessage());
+	        e.printStackTrace();
+	    }
 	}
 
 	@Transactional
@@ -211,21 +243,22 @@ public class ReservaService {
 			throw new AccessDeniedException("Sem permissão para cancelar esta reserva");
 		}
 		
-		// Verificar se não pode mais ser cancelada (já utilizada ou em andamento)
-		if (reserva.getStatus() == StatusReserva.UTILIZADO) {
-			throw new IllegalStateException("Não é possível cancelar uma reserva já utilizada");
+		// Verificar se o status permite cancelamento
+		if (!reserva.getStatus().podeSerCancelada()) {
+			throw new IllegalStateException("Não é possível cancelar a reserva com o status atual: " + reserva.getStatus());
 		}
 		
-		// Verificar se está a menos de 30 minutos do início
-		LocalDateTime agora = LocalDateTime.now();
-		LocalDateTime horaInicio = LocalDateTime.of(reserva.getData(), reserva.getHoraInicial());
-		
-		long minutosAteInicio = ChronoUnit.MINUTES.between(agora, horaInicio);
-		if (minutosAteInicio < 30 && minutosAteInicio > 0) {
-			throw new IllegalStateException("Não é possível cancelar reservas com menos de 30 minutos de antecedência");
+		// Se estiver em status PENDENTE, verificar se falta mais de 30 minutos
+		if (reserva.getStatus() == StatusReserva.PENDENTE) {
+			LocalDateTime agora = LocalDateTime.now();
+			LocalDateTime horaInicio = LocalDateTime.of(reserva.getData(), reserva.getHoraInicial());
+			
+			long minutosAteInicio = ChronoUnit.MINUTES.between(agora, horaInicio);
+			if (minutosAteInicio < 30 && minutosAteInicio > 0) {
+				throw new IllegalStateException("Não é possível cancelar reservas com menos de 30 minutos de antecedência");
+			}
 		}
 		
-		// IMPORTANTE: Mudamos para CANCELADO em vez de excluir
 		reserva.setStatus(StatusReserva.CANCELADO);
 		repository.save(reserva);
 	}
@@ -257,13 +290,9 @@ public class ReservaService {
 			throw new AccessDeniedException("Sem permissão para confirmar esta reserva");
 		}
 		
-		// Verificar se está em uso
-		LocalDateTime agora = LocalDateTime.now();
-		LocalDateTime horaInicio = LocalDateTime.of(reserva.getData(), reserva.getHoraInicial());
-		LocalDateTime horaFim = LocalDateTime.of(reserva.getData(), reserva.getHoraFinal());
-		
-		if (!(agora.isAfter(horaInicio) && agora.isBefore(horaFim))) {
-			throw new IllegalStateException("Só é possível confirmar a utilização durante o período reservado");
+		// Verificar se o status permite confirmação
+		if (!reserva.getStatus().podeConfirmarUtilizacao()) {
+			throw new IllegalStateException("Não é possível confirmar utilização neste momento. Status atual: " + reserva.getStatus());
 		}
 		
 		reserva.setStatus(StatusReserva.UTILIZADO);
@@ -370,66 +399,106 @@ public class ReservaService {
 	 * Verifica os horários disponíveis para um determinado espaço em uma data específica
 	 */
 	public Map<String, Boolean> verificarHorariosDisponiveis(Long espacoId, LocalDate data, Long professorId) {
-		// Inicializar mapa de horários com intervalos de 30 minutos entre 7:00 e 23:00
-		Map<String, Boolean> horariosDisponiveis = new TreeMap<>();
-		
-		LocalTime horaInicial = LocalTime.of(7, 0);
-		LocalTime horaFinal = LocalTime.of(23, 0);
-		
-		// Criar slots de 30 minutos
-		while (horaInicial.isBefore(horaFinal)) {
-			String slot = horaInicial.toString();
-			horariosDisponiveis.put(slot, true); // inicialmente todos os slots estão disponíveis
-			horaInicial = horaInicial.plusMinutes(30);
+	    // Inicializar mapa de horários com intervalos de 10 minutos
+	    Map<String, Boolean> horariosDisponiveis = new TreeMap<>();
+	    
+	    // Período típico de funcionamento: 7:00 às 23:00
+	    LocalTime inicioExpediente = LocalTime.of(7, 0);
+	    LocalTime fimExpediente = LocalTime.of(23, 0);
+	    
+	    // Criar slots de 10 minutos
+	    LocalTime horaAtual = inicioExpediente;
+	    while (horaAtual.isBefore(fimExpediente)) {
+	        // Formatar para hora:minuto (HH:mm)
+	        String horarioFormatado = horaAtual.format(DateTimeFormatter.ofPattern("HH:mm"));
+	        
+	        // Por padrão o horário está disponível
+	        horariosDisponiveis.put(horarioFormatado, true);
+	        
+	        // Avançar 10 minutos
+	        horaAtual = horaAtual.plusMinutes(10);
+	    }
+	    
+	    // Buscar reservas existentes para esta data e espaço
+	    String jpql = "SELECT r FROM Reserva r " +
+	                  "WHERE r.espacoAcademico.id = :espacoId " +
+	                  "AND r.data = :data " +
+	                  "AND r.status <> :statusCancelado";
+	                  
+	    List<Reserva> reservasExistentes = entityManager.createQuery(jpql, Reserva.class)
+	        .setParameter("espacoId", espacoId)
+	        .setParameter("data", data)
+	        .setParameter("statusCancelado", StatusReserva.CANCELADO)
+	        .getResultList();
+	    
+	    // Marcar horários reservados como indisponíveis
+	    for (Reserva reserva : reservasExistentes) {
+	        LocalTime inicio = reserva.getHoraInicial();
+	        LocalTime fim = reserva.getHoraFinal();
+	        
+	        // Marcar todos os slots que se sobrepõem com esta reserva como indisponíveis
+	        horariosDisponiveis.forEach((hora, disponivel) -> {
+	            LocalTime horaSlot = LocalTime.parse(hora);
+	            
+	            // Se o slot estiver dentro ou se sobrepõe à reserva existente
+	            if (!horaSlot.isBefore(inicio) && horaSlot.isBefore(fim)) {
+	                horariosDisponiveis.put(hora, false);
+	            }
+	        });
+	    }
+	    
+	    return horariosDisponiveis;
+	}
+
+	/**
+	 * Verifica se uma reserva pode ser alterada (apenas administradores e apenas até 30 minutos antes)
+	 */
+	public boolean reservaPodeSerAlterada(Long id, Usuario usuarioAtual) {
+		Reserva reserva = repository.findById(id)
+			.orElseThrow(() -> new ResourceNotFoundException("Reserva não encontrada"));
+			
+		// Apenas administradores podem alterar
+		if (!usuarioAtual.isAdmin()) {
+			return false;
 		}
 		
-		// Buscar reservas existentes para o espaço na data específica
-		List<Reserva> reservasExistentes = repository.findByEspacoAcademicoIdAndData(espacoId, data);
-		
-		// Marcar horários ocupados
-		for (Reserva reserva : reservasExistentes) {
-			if (reserva.getStatus() == StatusReserva.CANCELADO) {
-				continue; // ignorar reservas canceladas
-			}
-			
-			LocalTime inicio = reserva.getHoraInicial();
-			LocalTime fim = reserva.getHoraFinal();
-			
-			// Marcar todos os slots entre o início e o fim da reserva como indisponíveis
-			LocalTime atual = inicio;
-			while (atual.isBefore(fim)) {
-				String slot = atual.toString();
-				if (horariosDisponiveis.containsKey(slot)) {
-					horariosDisponiveis.put(slot, false);
-				}
-				atual = atual.plusMinutes(30);
-			}
+		// Não pode editar se não estiver no status pendente
+		if (!reserva.getStatus().podeSerEditada()) {
+			return false;
 		}
 		
-		// Se um professor foi especificado, verificar também suas reservas em outros espaços
-		if (professorId != null) {
-			List<Reserva> reservasProfessor = repository.findByProfessorIdAndData(professorId, data);
+		// Verificar se está a mais de 30 minutos do início
+		LocalDateTime agora = LocalDateTime.now();
+		LocalDateTime horaInicio = LocalDateTime.of(reserva.getData(), reserva.getHoraInicial());
+		
+		return ChronoUnit.MINUTES.between(agora, horaInicio) >= 30;
+	}
+
+	/**
+	 * Verifica se uma reserva pode ser cancelada
+	 */
+	public boolean reservaPodeSerCancelada(Long id, Usuario usuarioAtual) {
+		Reserva reserva = repository.findById(id)
+			.orElseThrow(() -> new ResourceNotFoundException("Reserva não encontrada"));
 			
-			for (Reserva reserva : reservasProfessor) {
-				if (reserva.getStatus() == StatusReserva.CANCELADO) {
-					continue;
-				}
-				
-				LocalTime inicio = reserva.getHoraInicial();
-				LocalTime fim = reserva.getHoraFinal();
-				
-				// Marcar horários em que o professor já está ocupado
-				LocalTime atual = inicio;
-				while (atual.isBefore(fim)) {
-					String slot = atual.toString();
-					if (horariosDisponiveis.containsKey(slot)) {
-						horariosDisponiveis.put(slot, false);
-					}
-					atual = atual.plusMinutes(30);
-				}
-			}
+		// Verificar permissão
+		if (!usuarioAtual.canAccess(reserva)) {
+			return false;
 		}
 		
-		return horariosDisponiveis;
+		// Não pode cancelar baseado no status
+		if (!reserva.getStatus().podeSerCancelada()) {
+			return false;
+		}
+		
+		// Se estiver em status PENDENTE, verificar se falta mais de 30 minutos
+		if (reserva.getStatus() == StatusReserva.PENDENTE) {
+			LocalDateTime agora = LocalDateTime.now();
+			LocalDateTime horaInicio = LocalDateTime.of(reserva.getData(), reserva.getHoraInicial());
+			
+			return ChronoUnit.MINUTES.between(agora, horaInicio) >= 30;
+		}
+		
+		return true;
 	}
 }

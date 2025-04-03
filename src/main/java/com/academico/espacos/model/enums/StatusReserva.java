@@ -5,7 +5,7 @@ package com.academico.espacos.model.enums;
  */
 public enum StatusReserva {
     /**
-     * Reserva pendente de aprovação
+     * Reserva pendente - aguardando o início do horário
      */
     PENDENTE,
     
@@ -13,6 +13,11 @@ public enum StatusReserva {
      * Reserva em uso (horário atual está dentro do intervalo da reserva)
      */
     EM_USO,
+    
+    /**
+     * Reserva aguardando confirmação de utilização (após o término)
+     */
+    AGUARDANDO_CONFIRMACAO,
     
     /**
      * Reserva já utilizada (concluída)
@@ -36,5 +41,26 @@ public enum StatusReserva {
      */
     public boolean isConcluido() {
         return this == UTILIZADO;
+    }
+    
+    /**
+     * Verifica se a reserva pode ser editada com base no status
+     */
+    public boolean podeSerEditada() {
+        return this == PENDENTE;
+    }
+    
+    /**
+     * Verifica se a reserva pode ser cancelada com base no status
+     */
+    public boolean podeSerCancelada() {
+        return this == PENDENTE || this == EM_USO;
+    }
+    
+    /**
+     * Verifica se a utilização pode ser confirmada
+     */
+    public boolean podeConfirmarUtilizacao() {
+        return this == EM_USO || this == AGUARDANDO_CONFIRMACAO;
     }
 }
