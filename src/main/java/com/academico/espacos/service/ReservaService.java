@@ -5,8 +5,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import com.academico.espacos.model.Reserva;
-import com.academico.espacos.model.Reserva.StatusReserva;
+import com.academico.espacos.model.enums.StatusReserva;
 import com.academico.espacos.model.EspacoAcademico;
 import com.academico.espacos.model.Usuario;
 import com.academico.espacos.model.Professor;
@@ -25,6 +26,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Map;
+import java.util.TreeMap;
 
 @Service
 public class ReservaService {
@@ -115,6 +118,12 @@ public class ReservaService {
 			}
 		}
 		
+		 // Adicionar ajuste para o problema de timezone
+		// Se a data vem com um dia a menos, adicione 1 dia para compensar
+		if (reserva.getData() != null) {
+			reserva.setData(reserva.getData().plusDays(1));
+		}
+		
 		// Verificar conflitos
 		validarConflitos(reserva);
 		
@@ -158,7 +167,7 @@ public class ReservaService {
 		LocalDate hoje = agora.toLocalDate();
 		LocalTime horaAtual = agora.toLocalTime();
 		
-		// Buscar todas as reservas não canceladas do dia atual e futuros próximos
+		// Buscar todas as reservas não canceladas
 		List<Reserva> reservasAtivas = repository.findByStatusNot(StatusReserva.CANCELADO);
 		
 		for (Reserva reserva : reservasAtivas) {
@@ -167,10 +176,13 @@ public class ReservaService {
 				continue;
 			}
 			
-			// Verificar se deve ser marcada como EM_USO
+			// Melhorar a verificação para marcar como EM_USO
 			if (reserva.getData().equals(hoje) && 
 				horaAtual.isAfter(reserva.getHoraInicial()) && 
 				horaAtual.isBefore(reserva.getHoraFinal())) {
+				
+				// Log para depuração
+				System.out.println("Atualizando reserva #" + reserva.getId() + " para EM_USO");
 				
 				reserva.setStatus(StatusReserva.EM_USO);
 				repository.save(reserva);
@@ -180,6 +192,9 @@ public class ReservaService {
 			// Verificar se deve ser marcada como UTILIZADO (passou do horário final)
 			LocalDateTime dataHoraFinal = LocalDateTime.of(reserva.getData(), reserva.getHoraFinal());
 			if (agora.isAfter(dataHoraFinal)) {
+				// Log para depuração
+				System.out.println("Atualizando reserva #" + reserva.getId() + " para UTILIZADO");
+				
 				reserva.setStatus(StatusReserva.UTILIZADO);
 				repository.save(reserva);
 			}
@@ -349,5 +364,72 @@ public class ReservaService {
 
 		reserva.setStatus(novoStatus);
 		repository.save(reserva);
+	}
+
+	/**
+	 * Verifica os horários disponíveis para um determinado espaço em uma data específica
+	 */
+	public Map<String, Boolean> verificarHorariosDisponiveis(Long espacoId, LocalDate data, Long professorId) {
+		// Inicializar mapa de horários com intervalos de 30 minutos entre 7:00 e 23:00
+		Map<String, Boolean> horariosDisponiveis = new TreeMap<>();
+		
+		LocalTime horaInicial = LocalTime.of(7, 0);
+		LocalTime horaFinal = LocalTime.of(23, 0);
+		
+		// Criar slots de 30 minutos
+		while (horaInicial.isBefore(horaFinal)) {
+			String slot = horaInicial.toString();
+			horariosDisponiveis.put(slot, true); // inicialmente todos os slots estão disponíveis
+			horaInicial = horaInicial.plusMinutes(30);
+		}
+		
+		// Buscar reservas existentes para o espaço na data específica
+		List<Reserva> reservasExistentes = repository.findByEspacoAcademicoIdAndData(espacoId, data);
+		
+		// Marcar horários ocupados
+		for (Reserva reserva : reservasExistentes) {
+			if (reserva.getStatus() == StatusReserva.CANCELADO) {
+				continue; // ignorar reservas canceladas
+			}
+			
+			LocalTime inicio = reserva.getHoraInicial();
+			LocalTime fim = reserva.getHoraFinal();
+			
+			// Marcar todos os slots entre o início e o fim da reserva como indisponíveis
+			LocalTime atual = inicio;
+			while (atual.isBefore(fim)) {
+				String slot = atual.toString();
+				if (horariosDisponiveis.containsKey(slot)) {
+					horariosDisponiveis.put(slot, false);
+				}
+				atual = atual.plusMinutes(30);
+			}
+		}
+		
+		// Se um professor foi especificado, verificar também suas reservas em outros espaços
+		if (professorId != null) {
+			List<Reserva> reservasProfessor = repository.findByProfessorIdAndData(professorId, data);
+			
+			for (Reserva reserva : reservasProfessor) {
+				if (reserva.getStatus() == StatusReserva.CANCELADO) {
+					continue;
+				}
+				
+				LocalTime inicio = reserva.getHoraInicial();
+				LocalTime fim = reserva.getHoraFinal();
+				
+				// Marcar horários em que o professor já está ocupado
+				LocalTime atual = inicio;
+				while (atual.isBefore(fim)) {
+					String slot = atual.toString();
+					if (horariosDisponiveis.containsKey(slot)) {
+						horariosDisponiveis.put(slot, false);
+					}
+					atual = atual.plusMinutes(30);
+				}
+			}
+		}
+		
+		return horariosDisponiveis;
 	}
 }

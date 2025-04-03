@@ -9,6 +9,8 @@ import com.academico.espacos.service.ReservaService;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
+
 import com.academico.espacos.exception.ResourceNotFoundException;
 import com.academico.espacos.controller.AuthController.ErrorResponse;
 import com.academico.espacos.exception.ReservaConflitanteException;
@@ -161,6 +163,23 @@ public class ReservaController {
         } catch (Exception e) {
             logger.error("Erro ao verificar se reserva pode ser editada: ", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @GetMapping("/horarios-disponiveis")
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROFESSOR')")
+    public ResponseEntity<?> verificarHorariosDisponiveis(
+            @RequestParam Long espacoId,
+            @RequestParam String data,
+            @RequestParam(required = false) Long professorId) {
+        try {
+            LocalDate dataReserva = LocalDate.parse(data);
+            Map<String, Boolean> horariosDisponiveis = service.verificarHorariosDisponiveis(espacoId, dataReserva, professorId);
+            return ResponseEntity.ok(horariosDisponiveis);
+        } catch (Exception e) {
+            logger.error("Erro ao verificar horários disponíveis: ", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ErrorResponse("Erro ao verificar horários disponíveis: " + e.getMessage()));
         }
     }
 }
