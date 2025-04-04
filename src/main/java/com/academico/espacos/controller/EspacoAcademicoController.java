@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.security.access.prepost.PreAuthorize;
 import com.academico.espacos.model.EspacoAcademico;
 import com.academico.espacos.service.EspacoAcademicoService;
+import com.academico.espacos.repository.ReservaRepository;
 import java.util.List;
 import com.academico.espacos.exception.ErrorResponse;
 import com.academico.espacos.exception.ResourceNotFoundException;
@@ -17,6 +18,9 @@ public class EspacoAcademicoController {
 
     @Autowired
     private EspacoAcademicoService service;
+    
+    @Autowired
+    private ReservaRepository reservaRepository;
 
     @PostMapping
     public ResponseEntity<EspacoAcademico> criar(@RequestBody EspacoAcademico espacoAcademico) {
@@ -65,5 +69,11 @@ public class EspacoAcademicoController {
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
         }
+    }
+
+    @GetMapping("/{id}/tem-reservas-utilizadas")
+    public ResponseEntity<Boolean> temReservasUtilizadas(@PathVariable Long id) {
+        boolean temReservas = reservaRepository.existsByEspacoAcademicoIdAndStatusUtilizado(id);
+        return ResponseEntity.ok(temReservas);
     }
 }

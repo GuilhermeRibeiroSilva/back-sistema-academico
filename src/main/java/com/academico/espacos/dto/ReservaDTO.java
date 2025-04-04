@@ -1,78 +1,26 @@
-package com.academico.espacos.model;
+package com.academico.espacos.dto;
 
+import com.academico.espacos.model.EspacoAcademico;
+import com.academico.espacos.model.Professor;
 import com.academico.espacos.model.enums.StatusReserva;
-import jakarta.persistence.*;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 
-@Entity
-@Table(name = "reservas")
-public class Reserva {
-    
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+public class ReservaDTO {
     private Long id;
-    
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "espaco_id", nullable = false)
     private EspacoAcademico espacoAcademico;
-    
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "professor_id", nullable = false)
     private Professor professor;
-    
-    @Column(nullable = false)
     private LocalDate data;
-    
-    @Column(nullable = false)
     private LocalTime horaInicial;
-    
-    @Column(nullable = false)
     private LocalTime horaFinal;
-    
-    @Column(length = 500)
     private String finalidade;
-    
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private StatusReserva status = StatusReserva.PENDENTE;
-    
-    @Column
-    private LocalDateTime dataCriacao = LocalDateTime.now();
-    
-    @Column
+    private StatusReserva status;
+    private LocalDateTime dataCriacao;
     private LocalDateTime dataAtualizacao;
-    
-    @Column
     private LocalDateTime dataUtilizacao;
-    
-    @PreUpdate
-    public void preUpdate() {
-        this.dataAtualizacao = LocalDateTime.now();
-    }
-    
-    // Método para confirmar utilização
-    public void confirmarUtilizacao() {
-        if (this.status == StatusReserva.EM_USO || this.status == StatusReserva.AGUARDANDO_CONFIRMACAO) {
-            this.status = StatusReserva.UTILIZADO;
-            this.dataUtilizacao = LocalDateTime.now();
-        }
-    }
-    
-    // Método para cancelar reserva
-    public void cancelar() {
-        if (this.status == StatusReserva.PENDENTE || this.status == StatusReserva.EM_USO) {
-            this.status = StatusReserva.CANCELADO;
-        }
-    }
-    
-    // Método para verificar se a reserva pode ser editada
-    public boolean podeSerEditada() {
-        return this.status == StatusReserva.PENDENTE;
-    }
-    
+
     // Getters e Setters
     public Long getId() {
         return id;

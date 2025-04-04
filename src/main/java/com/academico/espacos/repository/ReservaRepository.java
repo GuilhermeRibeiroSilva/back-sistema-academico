@@ -1,17 +1,17 @@
 package com.academico.espacos.repository;
 
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.util.List;
-
+import com.academico.espacos.model.Professor;
+import com.academico.espacos.model.Reserva;
+import com.academico.espacos.model.enums.StatusReserva;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import com.academico.espacos.model.Reserva;
-import com.academico.espacos.model.enums.StatusReserva;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.List;
 
 @Repository
 public interface ReservaRepository extends JpaRepository<Reserva, Long> {
@@ -46,8 +46,6 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
 
     List<Reserva> findByProfessorId(Long professorId);
 
-    boolean existsByIdAndUtilizadoTrue(Long id);
-
     @Query("SELECT r FROM Reserva r WHERE r.data = :data AND r.status = :status")
     List<Reserva> findByDataAndStatus(LocalDate data, StatusReserva status);
 
@@ -58,8 +56,33 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
     @Modifying
     void atualizarStatus(@Param("id") Long id, @Param("novoStatus") StatusReserva novoStatus);
 
-    // Adicionar método para encontrar reservas por status diferente de um valor
+    /**
+     * Busca reservas que não têm o status informado
+     */
     List<Reserva> findByStatusNot(StatusReserva status);
+
+    /**
+     * Busca reservas de um professor específico que não tenham o status informado
+     */
+    List<Reserva> findByProfessorAndStatusNot(Professor professor, StatusReserva status);
+
+    /**
+     * Verifica se uma reserva existe e tem status UTILIZADO
+     */
+    @Query("SELECT COUNT(r) > 0 FROM Reserva r WHERE r.id = :id AND r.status = 'UTILIZADO'")
+    boolean existsByIdAndStatusUtilizado(@Param("id") Long id);
+
+    /**
+     * Verifica se existem reservas utilizadas para o espaço fornecido
+     */
+    @Query("SELECT COUNT(r) > 0 FROM Reserva r WHERE r.espacoAcademico.id = :espacoId AND r.status = 'UTILIZADO'")
+    boolean existsByEspacoAcademicoIdAndStatusUtilizado(@Param("espacoId") Long espacoId);
+
+    /**
+     * Implementação manual do método para compatibilidade
+     */
+    @Query("SELECT COUNT(r) > 0 FROM Reserva r WHERE r.espacoAcademico.id = :id AND r.status = 'UTILIZADO'")
+    boolean existsByIdAndUtilizadoTrue(@Param("id") Long id);
 
     // Método para encontrar reservas ativas (não canceladas)
     @Query("SELECT r FROM Reserva r WHERE r.status != 'CANCELADO' ORDER BY r.data ASC, r.horaInicial ASC")
@@ -109,6 +132,23 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
     );
 
     /**
+     * Conta reservas que conflitam com os parâmetros informados (para verificar disponibilidade)
+     */
+    @Query("SELECT COUNT(r) FROM Reserva r " +
+           "WHERE r.data = :data " +
+           "AND r.espacoAcademico.id = :espacoId " +
+           "AND r.status != 'CANCELADO' " +
+           "AND ((r.horaInicial <= :horaFinal AND r.horaFinal >= :horaInicial)) " +
+           "AND (r.id != :reservaIdExcluir OR :reservaIdExcluir IS NULL)")
+    long countConflitos(
+        @Param("data") LocalDate data,
+        @Param("horaInicial") LocalTime horaInicial,
+        @Param("horaFinal") LocalTime horaFinal,
+        @Param("espacoId") Long espacoId,
+        @Param("reservaIdExcluir") Long reservaIdExcluir
+    );
+
+    /**
      * Busca reservas por status
      */
     List<Reserva> findByStatus(StatusReserva status);
@@ -134,5 +174,26 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
         @Param("data") LocalDate data,
         @Param("horaInicial") LocalTime horaInicial,
         @Param("horaFinal") LocalTime horaFinal
+    );
+
+    /**
+     * Busca reservas com um determinado status, na data especificada, 
+     * onde a hora inicial é menor ou igual à hora atual e a hora final é maior que a hora atual
+     */
+    List<Reserva> findByStatusAndDataAndHoraInicialLessThanEqualAndHoraFinalGreaterThan(
+        StatusReserva status, 
+        LocalDate data, 
+        LocalTime horaAtualInicio, 
+        LocalTime horaAtualFim
+    );
+
+    /**
+     * Busca reservas com um determinado status, na data especificada, 
+     * onde a hora final já passou
+     */
+    List<Reserva> findByStatusAndDataAndHoraFinalLessThanEqual(
+        StatusReserva status, 
+        LocalDate data, 
+        LocalTime horaAtual
     );
 }

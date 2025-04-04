@@ -1,272 +1,154 @@
 package com.academico.espacos.controller;
 
+import com.academico.espacos.dto.DisponibilidadeDTO;
+import com.academico.espacos.dto.ReservaDTO;
+import com.academico.espacos.dto.ReservaInputDTO;
+import com.academico.espacos.exception.BusinessException;
+import com.academico.espacos.exception.ResourceNotFoundException;
+import com.academico.espacos.model.Usuario;
+import com.academico.espacos.model.enums.Perfil;
+import com.academico.espacos.service.ReservaService;
+import com.academico.espacos.service.UsuarioService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
-import com.academico.espacos.model.Reserva;
-import com.academico.espacos.service.ReservaService;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
-
-import com.academico.espacos.exception.ResourceNotFoundException;
-import com.academico.espacos.controller.AuthController.ErrorResponse;
-import com.academico.espacos.exception.ReservaConflitanteException;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import com.academico.espacos.security.JwtTokenProvider;
-import com.academico.espacos.model.Usuario;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.format.annotation.DateTimeFormat;
 
 @RestController
 @RequestMapping("/api/reservas")
 public class ReservaController {
-
-    private static final Logger logger = LoggerFactory.getLogger(ReservaController.class);
-
-    @Autowired
-    private ReservaService service;
     
     @Autowired
-    private JwtTokenProvider jwtTokenProvider;
-
-    @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROFESSOR')")
-    public ResponseEntity<?> criarReserva(@RequestBody Reserva reserva, @RequestHeader("Authorization") String authHeader) {
-        try {
-            String token = authHeader.substring(7);
-            Usuario usuarioAtual = jwtTokenProvider.getUsuarioFromToken(token);
-            
-            // Adicionar validação de data atual para garantir
-            LocalDateTime agora = LocalDateTime.now();
-            if (reserva.getData() == null) {
-                return ResponseEntity.badRequest()
-                    .body(new ErrorResponse("A data da reserva é obrigatória"));
-            }
-            
-            LocalDateTime dataHoraReserva = LocalDateTime.of(reserva.getData(), reserva.getHoraInicial());
-            if (dataHoraReserva.isBefore(agora)) {
-                return ResponseEntity.badRequest()
-                    .body(new ErrorResponse("Não é possível criar reservas para datas/horários passados"));
-            }
-            
-            Reserva novaReserva = service.solicitar(reserva, usuarioAtual);
-            return ResponseEntity.status(HttpStatus.CREATED).body(novaReserva);
-        } catch (Exception e) {
-            logger.error("Erro ao criar reserva: ", e);
-            
-            if (e instanceof ReservaConflitanteException) {
-                return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(new ErrorResponse(e.getMessage()));
-            } else if (e instanceof IllegalArgumentException || e instanceof AccessDeniedException) {
-                return ResponseEntity.badRequest()
-                    .body(new ErrorResponse(e.getMessage()));
-            } else {
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ErrorResponse("Erro ao criar reserva: " + e.getMessage()));
-            }
-        }
-    }
-
-    @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<?> atualizarReserva(@PathVariable Long id, 
-                                        @RequestBody Reserva reserva,
-                                        @RequestHeader("Authorization") String authHeader) {
-        try {
-            String token = authHeader.substring(7);
-            Usuario usuarioAtual = jwtTokenProvider.getUsuarioFromToken(token);
-            
-            // Verificar se o usuário é admin
-            if (!usuarioAtual.isAdmin()) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(new ErrorResponse("Apenas administradores podem alterar reservas"));
-            }
-            
-            // Garantir que o ID corresponda
-            reserva.setId(id);
-            
-            // Verificar se a reserva pode ser alterada
-            if (!service.reservaPodeSerAlterada(id, usuarioAtual)) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ErrorResponse("Esta reserva não pode mais ser alterada"));
-            }
-            
-            Reserva reservaAtualizada = service.atualizar(reserva);
-            return ResponseEntity.ok(reservaAtualizada);
-        } catch (Exception e) {
-            logger.error("Erro ao atualizar reserva: ", e);
-            
-            if (e instanceof ReservaConflitanteException) {
-                return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(new ErrorResponse(e.getMessage()));
-            } else if (e instanceof ResourceNotFoundException) {
-                return ResponseEntity.notFound().build();
-            } else if (e instanceof IllegalArgumentException || e instanceof AccessDeniedException) {
-                return ResponseEntity.badRequest()
-                    .body(new ErrorResponse(e.getMessage()));
-            } else {
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ErrorResponse("Erro ao atualizar reserva: " + e.getMessage()));
-            }
-        }
-    }
-
+    private ReservaService reservaService;
+    
+    @Autowired
+    private UsuarioService usuarioService;
+    
+    /**
+     * Lista todas as reservas
+     * Para admin: todas as reservas
+     * Para professor: apenas suas reservas
+     */
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROFESSOR')")
-    public ResponseEntity<List<Reserva>> listarTodas(@RequestHeader("Authorization") String authHeader) {
-        // Extrair usuário do token
-        String token = authHeader.substring(7);
-        Usuario usuarioAtual = jwtTokenProvider.getUsuarioFromToken(token);
+    public ResponseEntity<List<ReservaDTO>> listar() {
+        Usuario usuarioLogado = getUsuarioLogado();
         
-        // Filtrar reservas conforme o tipo de usuário
-        return ResponseEntity.ok(service.listarReservas(usuarioAtual));
+        if (usuarioLogado.getPerfil() == Perfil.ADMIN) {
+            return ResponseEntity.ok(reservaService.buscarTodasAtivas());
+        } else {
+            return ResponseEntity.ok(reservaService.buscarPorProfessor(usuarioLogado.getProfessor().getId()));
+        }
     }
-
+    
+    /**
+     * Busca uma reserva específica por ID
+     */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROFESSOR')")
-    public ResponseEntity<Reserva> buscarPorId(@PathVariable Long id) {
-        return service.buscarPorId(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
-    }
-    
-    @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROFESSOR')")
-    public ResponseEntity<?> cancelar(@PathVariable Long id, @RequestHeader("Authorization") String authHeader) {
-        try {
-            // Extrair o token e obter o usuário atual
-            String token = authHeader.substring(7);
-            Usuario usuarioAtual = jwtTokenProvider.getUsuarioFromToken(token);
-            
-            // Passar o usuário para o método cancelarReserva
-            service.cancelarReserva(id, usuarioAtual);
-            return ResponseEntity.ok().build();
-        } catch (ResourceNotFoundException e) {
-            return ResponseEntity.notFound().build();
-        } catch (AccessDeniedException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(new ErrorResponse(e.getMessage()));
-        } catch (IllegalStateException e) {
-            return ResponseEntity.badRequest()
-                .body(new ErrorResponse(e.getMessage()));
-        } catch (Exception e) {
-            logger.error("Erro ao cancelar reserva: ", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ErrorResponse("Erro interno do servidor"));
-        }
-    }
-
-    @PatchMapping("/{id}/confirmar")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROFESSOR')")
-    public ResponseEntity<?> confirmarUtilizacao(@PathVariable Long id, 
-                                               @RequestHeader("Authorization") String authHeader) {
-        try {
-            String token = authHeader.substring(7);
-            Usuario usuarioAtual = jwtTokenProvider.getUsuarioFromToken(token);
-            
-            service.confirmarUtilizacao(id, usuarioAtual);
-            return ResponseEntity.ok().build();
-        } catch (ResourceNotFoundException e) {
-            return ResponseEntity.notFound().build();
-        } catch (AccessDeniedException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(new ErrorResponse(e.getMessage()));
-        } catch (IllegalStateException e) {
-            return ResponseEntity.badRequest()
-                .body(new ErrorResponse(e.getMessage()));
-        } catch (Exception e) {
-            logger.error("Erro ao confirmar utilização: ", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ErrorResponse("Erro interno do servidor"));
-        }
-    }
-
-    @GetMapping("/{id}/pode-editar")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROFESSOR')")
-    public ResponseEntity<Boolean> verificarPodeEditar(@PathVariable Long id) {
-        try {
-            boolean podeEditar = service.reservaPodeSerEditada(id);
-            return ResponseEntity.ok(podeEditar);
-        } catch (ResourceNotFoundException e) {
-            return ResponseEntity.notFound().build();
-        } catch (Exception e) {
-            logger.error("Erro ao verificar se reserva pode ser editada: ", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
-
-    @GetMapping("/horarios-disponiveis")
-    public ResponseEntity<Map<String, Boolean>> getHorariosDisponiveis(
-            @RequestParam("espacoId") Long espacoId,
-            @RequestParam("data") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate data,
-            @RequestParam(value = "professorId", required = false) Long professorId) {
+    public ResponseEntity<ReservaDTO> buscarPorId(@PathVariable Long id) {
+        Usuario usuarioLogado = getUsuarioLogado();
+        ReservaDTO reserva = reservaService.buscarPorId(id);
         
-        try {
-            Map<String, Boolean> horariosDisponiveis = service.verificarHorariosDisponiveis(
-                espacoId, data, professorId);
-            return ResponseEntity.ok(horariosDisponiveis);
-        } catch (Exception e) {
-            logger.error("Erro ao verificar horários disponíveis: ", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        // Professor só pode ver suas próprias reservas
+        if (usuarioLogado.getPerfil() != Perfil.ADMIN && 
+            !reserva.getProfessor().getId().equals(usuarioLogado.getProfessor().getId())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
-    }
-
-    @GetMapping("/{id}/pode-alterar")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Boolean> verificarPodeAlterar(@PathVariable Long id, 
-                                                     @RequestHeader("Authorization") String authHeader) {
-        try {
-            String token = authHeader.substring(7);
-            Usuario usuarioAtual = jwtTokenProvider.getUsuarioFromToken(token);
-            
-            boolean podeAlterar = service.reservaPodeSerAlterada(id, usuarioAtual);
-            return ResponseEntity.ok(podeAlterar);
-        } catch (ResourceNotFoundException e) {
-            return ResponseEntity.notFound().build();
-        } catch (Exception e) {
-            logger.error("Erro ao verificar se reserva pode ser alterada: ", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        
+        return ResponseEntity.ok(reserva);
     }
     
-    @GetMapping("/{id}/pode-cancelar")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROFESSOR')")
-    public ResponseEntity<Boolean> verificarPodeCancelar(@PathVariable Long id, 
-                                                      @RequestHeader("Authorization") String authHeader) {
-        try {
-            String token = authHeader.substring(7);
-            Usuario usuarioAtual = jwtTokenProvider.getUsuarioFromToken(token);
-            
-            boolean podeCancelar = service.reservaPodeSerCancelada(id, usuarioAtual);
-            return ResponseEntity.ok(podeCancelar);
-        } catch (ResourceNotFoundException e) {
-            return ResponseEntity.notFound().build();
-        } catch (Exception e) {
-            logger.error("Erro ao verificar se reserva pode ser cancelada: ", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+    /**
+     * Cria uma nova reserva
+     */
+    @PostMapping
+    public ResponseEntity<ReservaDTO> criar(@RequestBody ReservaInputDTO input) {
+        Usuario usuarioLogado = getUsuarioLogado();
+        
+        // Se não for admin, só pode fazer reserva para si mesmo
+        if (usuarioLogado.getPerfil() != Perfil.ADMIN) {
+            input.setProfessorId(usuarioLogado.getProfessor().getId());
         }
+        
+        ReservaDTO reservaCriada = reservaService.criar(input);
+        return ResponseEntity.status(HttpStatus.CREATED).body(reservaCriada);
     }
     
-    @GetMapping("/{id}/pode-confirmar")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROFESSOR')")
-    public ResponseEntity<Boolean> verificarPodeConfirmar(@PathVariable Long id) {
-        try {
-            Reserva reserva = service.buscarPorId(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Reserva não encontrada"));
-                
-            boolean podeConfirmar = reserva.getStatus().podeConfirmarUtilizacao();
-            return ResponseEntity.ok(podeConfirmar);
-        } catch (ResourceNotFoundException e) {
-            return ResponseEntity.notFound().build();
-        } catch (Exception e) {
-            logger.error("Erro ao verificar se reserva pode ser confirmada: ", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+    /**
+     * Atualiza uma reserva existente (apenas admin)
+     */
+    @PutMapping("/{id}")
+    public ResponseEntity<ReservaDTO> atualizar(@PathVariable Long id, @RequestBody ReservaInputDTO input) {
+        Usuario usuarioLogado = getUsuarioLogado();
+        
+        // Apenas admins podem editar reservas
+        if (usuarioLogado.getPerfil() != Perfil.ADMIN) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
+        
+        return ResponseEntity.ok(reservaService.atualizar(id, input));
+    }
+    
+    /**
+     * Cancela uma reserva
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> cancelar(@PathVariable Long id) {
+        Usuario usuarioLogado = getUsuarioLogado();
+        ReservaDTO reserva = reservaService.buscarPorId(id);
+        
+        // Apenas admin pode cancelar reservas
+        if (usuarioLogado.getPerfil() != Perfil.ADMIN) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        
+        reservaService.cancelar(id);
+        return ResponseEntity.noContent().build();
+    }
+    
+    /**
+     * Confirma a utilização de uma reserva
+     */
+    @PostMapping("/{id}/confirmar")
+    public ResponseEntity<Void> confirmarUtilizacao(@PathVariable Long id) {
+        Usuario usuarioLogado = getUsuarioLogado();
+        ReservaDTO reserva = reservaService.buscarPorId(id);
+        
+        // Professor só pode confirmar suas próprias reservas
+        if (usuarioLogado.getPerfil() != Perfil.ADMIN && 
+            !reserva.getProfessor().getId().equals(usuarioLogado.getProfessor().getId())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        
+        reservaService.confirmarUtilizacao(id);
+        return ResponseEntity.ok().build();
+    }
+    
+    /**
+     * Verifica disponibilidade para reserva
+     */
+    @PostMapping("/verificar-disponibilidade")
+    public ResponseEntity<Boolean> verificarDisponibilidade(@RequestBody DisponibilidadeDTO dto) {
+        boolean disponivel = reservaService.verificarDisponibilidade(
+            dto.getData(), 
+            dto.getHoraInicial(), 
+            dto.getHoraFinal(), 
+            dto.getEspacoId(),
+            dto.getReservaId()
+        );
+        
+        return ResponseEntity.ok(disponivel);
+    }
+    
+    /**
+     * Obtém o usuário logado a partir do token de autenticação
+     */
+    private Usuario getUsuarioLogado() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return usuarioService.buscarPorUsername(authentication.getName());
     }
 }

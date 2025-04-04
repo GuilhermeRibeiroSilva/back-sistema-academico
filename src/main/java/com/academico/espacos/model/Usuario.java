@@ -1,24 +1,32 @@
 package com.academico.espacos.model;
 
+import com.academico.espacos.model.enums.Perfil;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import jakarta.persistence.*;
+import java.util.Collection;
+import java.util.Collections;
 
 @Entity
 @Table(name = "usuarios")
 public class Usuario {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(unique = true, nullable = false)
+    @Column(nullable = false, unique = true)
     private String username;
 
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     @Column(nullable = false)
     private String password;
 
     @Column(nullable = false)
-    private String role; // ROLE_ADMIN ou ROLE_PROFESSOR
+    private String role;
 
-    @OneToOne(fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "professor_id")
     private Professor professor;
 
@@ -47,6 +55,22 @@ public class Usuario {
         this.password = password;
     }
 
+    public Perfil getPerfil() {
+        if (role != null && role.contains("ADMIN")) {
+            return Perfil.ADMIN;
+        } else {
+            return Perfil.PROFESSOR;
+        }
+    }
+
+    public void setPerfil(Perfil perfil) {
+        if (perfil == Perfil.ADMIN) {
+            this.role = "ROLE_ADMIN";
+        } else {
+            this.role = "ROLE_PROFESSOR";
+        }
+    }
+
     public String getRole() {
         return role;
     }
@@ -63,27 +87,19 @@ public class Usuario {
         this.professor = professor;
     }
 
-    // Métodos de verificação de autorização
-    public boolean isAdmin() {
-        return "ROLE_ADMIN".equals(this.role);
-    }
-
+    /**
+     * Verifica se o usuário é um professor
+     * @return true se o usuário tiver o perfil de PROFESSOR
+     */
     public boolean isProfessor() {
-        return "ROLE_PROFESSOR".equals(this.role);
+        return this.getPerfil() == Perfil.PROFESSOR;
     }
 
-    // Verificação de propriedade de dados
-    public boolean isOwner(Professor professor) {
-        return this.professor != null && this.professor.getId().equals(professor.getId());
-    }
-
-    // Verifica se tem acesso a uma reserva específica
-    public boolean canAccess(Reserva reserva) {
-        // Admins podem acessar qualquer reserva
-        // Professores só acessam suas próprias reservas
-        return isAdmin() || 
-               (isProfessor() && professor != null && 
-                reserva.getProfessor() != null && 
-                reserva.getProfessor().getId().equals(professor.getId()));
+    /**
+     * Verifica se o usuário é um administrador
+     * @return true se o usuário tiver o perfil de ADMIN
+     */
+    public boolean isAdmin() {
+        return this.getPerfil() == Perfil.ADMIN;
     }
 }

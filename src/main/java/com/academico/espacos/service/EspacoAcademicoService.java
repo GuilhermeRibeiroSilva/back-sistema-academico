@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 import com.academico.espacos.model.EspacoAcademico;
 import com.academico.espacos.repository.EspacoAcademicoRepository;
 import com.academico.espacos.exception.ResourceNotFoundException;
+import com.academico.espacos.exception.BusinessException;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.transaction.annotation.Transactional;
@@ -65,6 +66,19 @@ public class EspacoAcademicoService {
         repository.delete(espaco);
     }
 
+    @Transactional
+    public void excluir(Long id, boolean force) {
+        EspacoAcademico espaco = repository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("Espaço Acadêmico não encontrado"));
+        
+        // Verificar se existem reservas utilizadas para este espaço
+        if (!force && reservaRepository.existsByEspacoAcademicoIdAndStatusUtilizado(id)) {
+            throw new BusinessException("Não é possível excluir um espaço com reservas utilizadas. Use force=true para forçar exclusão.");
+        }
+        
+        repository.delete(espaco);
+    }
+
     public void tornarIndisponivel(Long id) {
         EspacoAcademico espaco = repository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Espaço Acadêmico não encontrado com id: " + id));
@@ -89,5 +103,11 @@ public class EspacoAcademicoService {
                 return reservasConflitantes.isEmpty();
             })
             .collect(Collectors.toList());
+    }
+
+    // Exemplo: Método que verifica se um espaço está em uso
+    public boolean espacoTemReservaUtilizada(Long id) {
+        // Use o novo método que criamos
+        return reservaRepository.existsByIdAndStatusUtilizado(id);
     }
 }

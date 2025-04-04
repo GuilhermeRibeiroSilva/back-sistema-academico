@@ -75,4 +75,12 @@ public class UsuarioService {
         // não precisamos excluir manualmente as reservas
         usuarioRepository.delete(usuario);
     }
+    
+    /**
+     * Busca um usuário pelo nome de usuário
+     */
+    public Usuario buscarPorUsername(String username) {
+        return usuarioRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado"));
+    }
 }

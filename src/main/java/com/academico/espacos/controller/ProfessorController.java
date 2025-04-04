@@ -15,10 +15,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.academico.espacos.dto.ReservaDTO;
 import com.academico.espacos.exception.ErrorResponse;
 import com.academico.espacos.exception.ResourceNotFoundException;
 import com.academico.espacos.model.Professor;
-import com.academico.espacos.model.Reserva;
 import com.academico.espacos.service.ProfessorService;
 import com.academico.espacos.service.ReservaService;
 
@@ -55,6 +55,9 @@ public class ProfessorController {
         return ResponseEntity.ok(service.atualizar(id, professor));
     }
     
+    /**
+     * Busca as reservas de um professor específico
+     */
     @GetMapping("/{id}/reservas")
     public ResponseEntity<?> listarReservasDoProfessor(@PathVariable Long id) {
         try {
@@ -62,8 +65,8 @@ public class ProfessorController {
             Professor professor = service.buscarPorId(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Professor não encontrado com id: " + id));
             
-            // Busca as reservas do professor
-            List<Reserva> reservas = reservaService.buscarReservasPorProfessor(id);
+            // Busca as reservas do professor usando o método buscarPorProfessor
+            List<ReservaDTO> reservas = reservaService.buscarPorProfessor(id);
             return ResponseEntity.ok(reservas);
         } catch (ResourceNotFoundException e) {
             return ResponseEntity.notFound().build();
