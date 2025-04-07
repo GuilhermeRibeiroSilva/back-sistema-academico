@@ -5,8 +5,11 @@ import com.academico.espacos.dto.ReservaDTO;
 import com.academico.espacos.dto.ReservaInputDTO;
 import com.academico.espacos.exception.BusinessException;
 import com.academico.espacos.exception.ResourceNotFoundException;
+import com.academico.espacos.exception.ErrorResponse;
+import com.academico.espacos.model.Reserva;
 import com.academico.espacos.model.Usuario;
 import com.academico.espacos.model.enums.Perfil;
+import com.academico.espacos.model.enums.StatusReserva;
 import com.academico.espacos.service.ReservaService;
 import com.academico.espacos.service.UsuarioService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,8 +19,14 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import javax.validation.Valid;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
+import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestController
 @RequestMapping("/api/reservas")
@@ -28,6 +37,8 @@ public class ReservaController {
     
     @Autowired
     private UsuarioService usuarioService;
+    
+    private static final Logger logger = LoggerFactory.getLogger(ReservaController.class);
     
     /**
      * Lista todas as reservas
@@ -145,10 +156,105 @@ public class ReservaController {
     }
     
     /**
+     * Busca reservas por espaço e data - modificado para incluir apenas reservas não canceladas
+     */
+    @GetMapping("/buscar-por-espaco-data")
+    public ResponseEntity<?> buscarPorEspacoEData(
+            @RequestParam Long espacoId,
+            @RequestParam String data) {
+        try {
+            LocalDate localDate = LocalDate.parse(data);
+            List<Reserva> reservas = reservaService.buscarPorEspacoEData(espacoId, localDate);
+            
+            // Filtrar apenas reservas não canceladas
+            List<Reserva> reservasAtivas = reservas.stream()
+                .filter(r -> r.getStatus() != StatusReserva.CANCELADO)
+                .collect(Collectors.toList());
+                
+            return ResponseEntity.ok(reservasAtivas.stream().map(this::toReservaDTO).collect(Collectors.toList()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR.value(), 
+                         "Erro ao buscar reservas: " + e.getMessage()));
+        }
+    }
+    
+    /**
+     * Cria uma nova reserva com validação de horários
+     */
+    @PostMapping
+    public ResponseEntity<?> criarReserva(@Valid @RequestBody ReservaDTO reservaDTO) {
+        try {
+            logger.info("Tentando criar reserva: {}", reservaDTO);
+            
+            // Validar formato e ordem dos horários
+            if (reservaDTO.getHoraInicial() != null && reservaDTO.getHoraFinal() != null) {
+                LocalTime horaInicial = LocalTime.parse(reservaDTO.getHoraInicial());
+                LocalTime horaFinal = LocalTime.parse(reservaDTO.getHoraFinal());
+                
+                if (horaInicial.isAfter(horaFinal)) {
+                    logger.error("Tentativa de criar reserva com horários invertidos: {} > {}", 
+                        reservaDTO.getHoraInicial(), reservaDTO.getHoraFinal());
+                    return ResponseEntity.badRequest().body(
+                        new ErrorResponse(HttpStatus.BAD_REQUEST.value(), 
+                        "A hora inicial não pode ser maior que a hora final"));
+                }
+            }
+            
+            // Chamar o serviço para criar a reserva
+            Reserva reserva = reservaService.criarReserva(reservaDTO);
+            logger.info("Reserva criada com sucesso: ID = {}", reserva.getId());
+            return ResponseEntity.status(HttpStatus.CREATED).body(toReservaDTO(reserva));
+        } catch (Exception e) {
+            logger.error("Erro ao criar reserva: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR.value(), 
+                         "Erro ao criar reserva: " + e.getMessage()));
+        }
+    }
+    
+    /**
      * Obtém o usuário logado a partir do token de autenticação
      */
     private Usuario getUsuarioLogado() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         return usuarioService.buscarPorUsername(authentication.getName());
+    }
+    
+    /**
+     * Método auxiliar para converter Reserva para ReservaDTO
+     */
+    private ReservaDTO toReservaDTO(Reserva reserva) {
+        ReservaDTO dto = new ReservaDTO();
+        dto.setId(reserva.getId());
+        
+        if (reserva.getEspacoAcademico() != null) {
+            dto.setEspacoAcademico(reserva.getEspacoAcademico());
+            dto.setEspacoAcademicoId(reserva.getEspacoAcademico().getId());
+        }
+        
+        if (reserva.getProfessor() != null) {
+            dto.setProfessor(reserva.getProfessor());
+            dto.setProfessorId(reserva.getProfessor().getId());
+        }
+        
+        dto.setData(reserva.getData());
+        
+        // Converter LocalTime para String
+        if (reserva.getHoraInicial() != null) {
+            dto.setHoraInicial(reserva.getHoraInicial().toString());
+        }
+        
+        if (reserva.getHoraFinal() != null) {
+            dto.setHoraFinal(reserva.getHoraFinal().toString());
+        }
+        
+        dto.setFinalidade(reserva.getFinalidade());
+        dto.setStatus(reserva.getStatus());
+        dto.setDataCriacao(reserva.getDataCriacao());
+        dto.setDataAtualizacao(reserva.getDataAtualizacao());
+        dto.setDataUtilizacao(reserva.getDataUtilizacao());
+        
+        return dto;
     }
 }

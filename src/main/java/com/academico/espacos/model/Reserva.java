@@ -26,17 +26,17 @@ public class Reserva {
     @Column(nullable = false)
     private LocalDate data;
     
-    @Column(nullable = false)
+    @Column(name = "hora_inicial")
     private LocalTime horaInicial;
     
-    @Column(nullable = false)
+    @Column(name = "hora_final")
     private LocalTime horaFinal;
     
     @Column(length = 500)
     private String finalidade;
     
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(name = "status", nullable = false)
     private StatusReserva status = StatusReserva.PENDENTE;
     
     @Column

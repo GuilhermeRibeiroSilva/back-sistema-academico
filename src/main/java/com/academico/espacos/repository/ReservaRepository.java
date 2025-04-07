@@ -88,10 +88,11 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
     @Query("SELECT r FROM Reserva r WHERE r.status != 'CANCELADO' ORDER BY r.data ASC, r.horaInicial ASC")
     List<Reserva> findAllActiveOrderedByDateTime();
 
+
     /**
      * Busca reservas por espaço acadêmico e data
      */
-    List<Reserva> findByEspacoAcademicoIdAndData(Long espacoAcademicoId, LocalDate data);
+    List<Reserva> findByEspacoAcademicoIdAndData(Long espacoId, LocalDate data);
 
     /**
      * Verifica se existe alguma reserva para o espaço acadêmico na data/hora especificada
