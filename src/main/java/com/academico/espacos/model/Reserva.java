@@ -37,7 +37,7 @@ public class Reserva {
     
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private StatusReserva status = StatusReserva.PENDENTE;
+    private StatusReserva status = StatusReserva.AGENDADO;
     
     @Column
     private LocalDateTime dataCriacao = LocalDateTime.now();
@@ -63,14 +63,14 @@ public class Reserva {
     
     // Método para cancelar reserva
     public void cancelar() {
-        if (this.status == StatusReserva.PENDENTE || this.status == StatusReserva.EM_USO) {
+        if (this.status == StatusReserva.AGENDADO || this.status == StatusReserva.PENDENTE || this.status == StatusReserva.EM_USO) {
             this.status = StatusReserva.CANCELADO;
         }
     }
     
     // Método para verificar se a reserva pode ser editada
     public boolean podeSerEditada() {
-        return this.status == StatusReserva.PENDENTE;
+        return this.status == StatusReserva.AGENDADO || this.status == StatusReserva.PENDENTE;
     }
     
     // Getters e Setters

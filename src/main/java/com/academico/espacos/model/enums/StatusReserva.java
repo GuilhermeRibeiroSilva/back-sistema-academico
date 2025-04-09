@@ -5,9 +5,18 @@ package com.academico.espacos.model.enums;
  */
 public enum StatusReserva {
     /**
-     * Reserva pendente - aguardando o início do horário
+     * Reserva agendada - aguardando o início do horário
+     * (anteriormente chamado de PENDENTE)
      */
-    PENDENTE,
+    AGENDADO("PENDENTE"),
+    
+    /**
+     * Status legado mantido para compatibilidade com banco de dados
+     * Referencia o mesmo que AGENDADO
+     * @deprecated Use AGENDADO em vez disso
+     */
+    @Deprecated
+    PENDENTE("AGENDADO"),
     
     /**
      * Reserva em uso (horário atual está dentro do intervalo da reserva)
@@ -29,6 +38,26 @@ public enum StatusReserva {
      */
     CANCELADO;
     
+    private final String aliasValue;
+    
+    StatusReserva() {
+        this.aliasValue = null;
+    }
+    
+    StatusReserva(String aliasValue) {
+        this.aliasValue = aliasValue;
+    }
+    
+    public static StatusReserva fromString(String text) {
+        for (StatusReserva status : StatusReserva.values()) {
+            if (status.name().equalsIgnoreCase(text) || 
+                (status.aliasValue != null && status.aliasValue.equalsIgnoreCase(text))) {
+                return status;
+            }
+        }
+        return AGENDADO; // Default para manter comportamento existente
+    }
+    
     /**
      * Verifica se o status representa uma reserva ativa (não cancelada)
      */
@@ -47,14 +76,14 @@ public enum StatusReserva {
      * Verifica se a reserva pode ser editada com base no status
      */
     public boolean podeSerEditada() {
-        return this == PENDENTE;
+        return this == AGENDADO || this == PENDENTE;
     }
     
     /**
      * Verifica se a reserva pode ser cancelada com base no status
      */
     public boolean podeSerCancelada() {
-        return this == PENDENTE || this == EM_USO;
+        return this == AGENDADO || this == PENDENTE || this == EM_USO;
     }
     
     /**
