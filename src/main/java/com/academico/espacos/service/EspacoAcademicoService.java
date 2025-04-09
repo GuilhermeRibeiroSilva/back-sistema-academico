@@ -79,6 +79,14 @@ public class EspacoAcademicoService {
         repository.delete(espaco);
     }
 
+    @Transactional
+    public void tornarDisponivel(Long id) {
+        EspacoAcademico espaco = repository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("Espaço Acadêmico não encontrado com id: " + id));
+        espaco.setDisponivel(true);
+        repository.save(espaco);
+    }
+
     public void tornarIndisponivel(Long id) {
         EspacoAcademico espaco = repository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Espaço Acadêmico não encontrado com id: " + id));

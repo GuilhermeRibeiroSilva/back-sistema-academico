@@ -146,7 +146,7 @@ public class ReservaService {
     
     /**
      * Método para atualizar automaticamente o status das reservas
-     * Corrigido para lidar corretamente com a mudança de status
+     * Inclui lógica para atualizar reservas aguardando confirmação para utilizadas após 30 minutos
      */
     @Scheduled(fixedRate = 60000) // Verifica a cada minuto
     @Transactional
@@ -218,6 +218,38 @@ public class ReservaService {
                     }
                 }
             }
+            
+            // NOVA LÓGICA: Buscar reservas aguardando confirmação
+            List<Reserva> reservasAguardando = reservaRepository.findByDataAndStatus(hoje, StatusReserva.AGUARDANDO_CONFIRMACAO);
+            
+            for (Reserva reserva : reservasAguardando) {
+                // Obter o horário final
+                LocalTime horaFinal = reserva.getHoraFinal();
+                
+                // Adicionar 30 minutos ao horário final para verificar se já passou o tempo de espera
+                LocalTime horaLimiteConfirmacao = horaFinal.plusMinutes(30);
+                
+                // Se já passou 30 minutos após horário final, atualizar para UTILIZADO automaticamente
+                if (agora.isAfter(horaLimiteConfirmacao)) {
+                    reserva.setStatus(StatusReserva.UTILIZADO);
+                    reserva.setDataAtualizacao(LocalDateTime.now());
+                    reserva.setDataUtilizacao(LocalDateTime.now());
+                    logger.info("Reserva #{} atualizada para UTILIZADO automaticamente após 30 minutos de espera", reserva.getId());
+                    reservaRepository.save(reserva);
+                }
+            }
+            
+            // Também devemos verificar reservas de dias anteriores que ainda estão aguardando confirmação
+            List<Reserva> reservasAnterioresAguardando = reservaRepository.findByDataBeforeAndStatus(hoje, StatusReserva.AGUARDANDO_CONFIRMACAO);
+            
+            for (Reserva reserva : reservasAnterioresAguardando) {
+                // Todas as reservas de dias anteriores que ainda estão aguardando devem ser atualizadas para UTILIZADO
+                reserva.setStatus(StatusReserva.UTILIZADO);
+                reserva.setDataAtualizacao(LocalDateTime.now());
+                reserva.setDataUtilizacao(LocalDateTime.now());
+                logger.info("Reserva #{} de dia anterior atualizada para UTILIZADO automaticamente", reserva.getId());
+                reservaRepository.save(reserva);
+            }
         } catch (Exception e) {
             logger.error("Erro ao atualizar status das reservas: {}", e.getMessage(), e);
         }
@@ -257,23 +289,36 @@ public class ReservaService {
      * Valida os dados de uma reserva
      */
     private void validarDados(ReservaInputDTO input, Long idReservaAtual) {
-        // Validação de horários
-        if (input.getHoraInicial().isAfter(input.getHoraFinal()) || input.getHoraInicial().equals(input.getHoraFinal())) {
-            throw new BusinessException("Hora inicial deve ser anterior à hora final");
+        // Verificar se o espaço existe e está disponível
+        EspacoAcademico espaco = espacoRepository.findById(input.getEspacoAcademicoId())
+            .orElseThrow(() -> new ResourceNotFoundException("Espaço Acadêmico não encontrado"));
+        
+        // Verificar se o espaço está marcado como disponível no sistema
+        if (!espaco.isDisponivel()) {
+            throw new BusinessException("Este espaço está indisponível (em manutenção/reforma)");
         }
         
-        // Validação de data
-        if (input.getData().isBefore(LocalDate.now())) {
-            throw new BusinessException("Não é possível criar reservas para datas passadas");
+        // Verificar se o professor existe
+        Professor professor = professorRepository.findById(input.getProfessorId())
+            .orElseThrow(() -> new ResourceNotFoundException("Professor não encontrado"));
+        
+        // Verificar disponibilidade de horário
+        LocalDate data = input.getData();
+        LocalTime horaInicial = input.getHoraInicial();
+        LocalTime horaFinal = input.getHoraFinal();
+        
+        // Validação de data passada
+        if (data.isBefore(LocalDate.now())) {
+            throw new BusinessException("Não é possível fazer reservas para datas passadas");
         }
         
-        // Verificar disponibilidade
-        if (!verificarDisponibilidade(
-                input.getData(), 
-                input.getHoraInicial(), 
-                input.getHoraFinal(), 
-                input.getEspacoAcademicoId(), 
-                idReservaAtual)) {
+        // Validação de hora (hora final deve ser posterior à inicial)
+        if (horaInicial.isAfter(horaFinal) || horaInicial.equals(horaFinal)) {
+            throw new BusinessException("Hora final deve ser posterior à hora inicial");
+        }
+        
+        // Verificar conflito com outras reservas
+        if (!verificarDisponibilidade(data, horaInicial, horaFinal, input.getEspacoAcademicoId(), idReservaAtual)) {
             throw new BusinessException("Já existe uma reserva para este espaço no horário solicitado");
         }
     }

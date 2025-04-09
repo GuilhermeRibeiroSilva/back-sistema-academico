@@ -197,4 +197,9 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
         LocalDate data, 
         LocalTime horaAtual
     );
+
+    /**
+     * Busca reservas por status que tenham data anterior à data informada
+     */
+    List<Reserva> findByDataBeforeAndStatus(LocalDate data, StatusReserva status);
 }

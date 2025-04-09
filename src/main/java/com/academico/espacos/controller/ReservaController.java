@@ -6,10 +6,12 @@ import com.academico.espacos.dto.ReservaInputDTO;
 import com.academico.espacos.exception.BusinessException;
 import com.academico.espacos.exception.ResourceNotFoundException;
 import com.academico.espacos.exception.ErrorResponse;
+import com.academico.espacos.model.EspacoAcademico; // Adicionado import para EspacoAcademico
 import com.academico.espacos.model.Reserva;
 import com.academico.espacos.model.Usuario;
 import com.academico.espacos.model.enums.Perfil;
 import com.academico.espacos.model.enums.StatusReserva;
+import com.academico.espacos.repository.EspacoAcademicoRepository; // Adicionado import para o repositório
 import com.academico.espacos.service.ReservaService;
 import com.academico.espacos.service.UsuarioService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,10 +21,11 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
-import jakarta.validation.Valid;  // Alterado de javax.validation para jakarta.validation
+import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -37,6 +40,9 @@ public class ReservaController {
     
     @Autowired
     private UsuarioService usuarioService;
+    
+    @Autowired
+    private EspacoAcademicoRepository espacoRepository; // Adicionado o repositório de espaços
     
     private static final Logger logger = LoggerFactory.getLogger(ReservaController.class);
     
@@ -140,10 +146,17 @@ public class ReservaController {
     }
     
     /**
-     * Verifica disponibilidade para reserva
+     * Verifica disponibilidade para reserva, considerando também o status do espaço
      */
     @PostMapping("/verificar-disponibilidade")
     public ResponseEntity<Boolean> verificarDisponibilidade(@RequestBody DisponibilidadeDTO dto) {
+        // Primeiro verificar se o espaço está marcado como disponível
+        Optional<EspacoAcademico> espacoOpt = espacoRepository.findById(dto.getEspacoId());
+        
+        if (espacoOpt.isEmpty() || !espacoOpt.get().isDisponivel()) {
+            return ResponseEntity.ok(false); // Espaço não existe ou está indisponível
+        }
+        
         boolean disponivel = reservaService.verificarDisponibilidade(
             dto.getData(), 
             dto.getHoraInicial(), 

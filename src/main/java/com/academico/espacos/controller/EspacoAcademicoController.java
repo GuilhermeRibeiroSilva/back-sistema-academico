@@ -61,6 +61,12 @@ public class EspacoAcademicoController {
         return ResponseEntity.ok().build();
     }
     
+    @PatchMapping("/{id}/disponivel")
+    public ResponseEntity<Void> tornarDisponivel(@PathVariable Long id) {
+        service.tornarDisponivel(id);
+        return ResponseEntity.ok().build();
+    }
+    
     @DeleteMapping("/{id}")
     public ResponseEntity<?> excluir(@PathVariable Long id) {
         try {
