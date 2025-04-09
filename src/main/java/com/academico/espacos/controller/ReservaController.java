@@ -19,7 +19,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
-import javax.validation.Valid;
+import jakarta.validation.Valid;  // Alterado de javax.validation para jakarta.validation
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -76,8 +76,8 @@ public class ReservaController {
     /**
      * Cria uma nova reserva
      */
-    @PostMapping
-    public ResponseEntity<ReservaDTO> criar(@RequestBody ReservaInputDTO input) {
+    @PostMapping("/criar")  // ou outro path diferente
+    public ResponseEntity<?> criar(@RequestBody ReservaInputDTO input) {
         Usuario usuarioLogado = getUsuarioLogado();
         
         // Se não for admin, só pode fazer reserva para si mesmo

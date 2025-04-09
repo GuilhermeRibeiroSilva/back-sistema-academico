@@ -350,7 +350,15 @@ public class ReservaService {
         reserva.setDataAtualizacao(LocalDateTime.now());
         
         // Verificar se já existe reserva para o mesmo espaço, data e horário que se sobreponha
-        verificarDisponibilidade(reserva);
+        if (!verificarDisponibilidade(
+            reserva.getData(),
+            reserva.getHoraInicial(),
+            reserva.getHoraFinal(),
+            reserva.getEspacoAcademico().getId(),
+            reserva.getId()
+        )) {
+            throw new BusinessException("Já existe uma reserva para este espaço no horário solicitado");
+        }
         
         // Salvar e retornar
         return reservaRepository.save(reserva);
