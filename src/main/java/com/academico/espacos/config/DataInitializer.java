@@ -111,6 +111,7 @@ public class DataInitializer {
         }
     }
     
+    @Transactional
     private void corrigirStatusInvalidos(String tabela) {
         try {
             String statusValidos = String.join("', '", STATUS_VALIDOS);

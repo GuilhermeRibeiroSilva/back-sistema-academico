@@ -272,7 +272,6 @@ public class ReservaService {
         reserva.setData(input.getData());
         reserva.setHoraInicial(input.getHoraInicial());
         reserva.setHoraFinal(input.getHoraFinal());
-        reserva.setFinalidade(input.getFinalidade());
     }
     
     private EspacoAcademico encontrarEspaco(Long espacoId) {
@@ -303,7 +302,7 @@ public class ReservaService {
         // Obter dados de data e hora
         validarDataHora(input.getData(), input.getHoraInicial(), input.getHoraFinal());
         
-        // Verificar conflito com outras reservas
+        // Verificar conflito com outras reservas (para o espaço)
         if (!verificarDisponibilidade(
                 input.getData(), 
                 input.getHoraInicial(), 
@@ -311,6 +310,18 @@ public class ReservaService {
                 input.getEspacoAcademicoId(), 
                 idReservaAtual)) {
             throw new BusinessException("Já existe uma reserva para este espaço no horário solicitado");
+        }
+        
+        // Verificar conflito para o professor (nova validação)
+        if (reservaRepository.existsConflitoPorProfessor(
+                input.getProfessorId(),
+                input.getData(),
+                input.getHoraInicial(),
+                input.getHoraFinal()) && 
+            (idReservaAtual == null || !reservaRepository.findById(idReservaAtual)
+                .map(r -> r.getProfessor().getId().equals(input.getProfessorId()))
+                .orElse(false))) {
+            throw new BusinessException("O professor já possui outra reserva para este mesmo horário");
         }
     }
     
@@ -354,7 +365,6 @@ public class ReservaService {
             dto.setHoraFinal(reserva.getHoraFinal().toString());
         }
         
-        dto.setFinalidade(reserva.getFinalidade());
         dto.setStatus(reserva.getStatus());
         dto.setDataCriacao(reserva.getDataCriacao());
         dto.setDataAtualizacao(reserva.getDataAtualizacao());
@@ -396,8 +406,7 @@ public class ReservaService {
             reserva.setHoraFinal(LocalTime.parse(reservaDTO.getHoraFinal()));
         }
         
-        reserva.setFinalidade(reservaDTO.getFinalidade());
-        reserva.setStatus(StatusReserva.PENDENTE); // Nova reserva sempre começa como pendente
+        reserva.setStatus(StatusReserva.AGENDADO);
         reserva.setDataCriacao(LocalDateTime.now());
         reserva.setDataAtualizacao(LocalDateTime.now());
         

@@ -4,7 +4,8 @@ import com.academico.espacos.dto.UsuarioResponse;
 import com.academico.espacos.dto.CriarUsuarioProfessorRequest;
 import com.academico.espacos.dto.ResetarSenhaRequest;
 import com.academico.espacos.dto.SuccessResponse;
-import com.academico.espacos.dto.ErrorResponse;
+// Corrigir importação de ErrorResponse
+import com.academico.espacos.exception.ErrorResponse;
 import com.academico.espacos.model.Usuario;
 import com.academico.espacos.service.UsuarioService;
 
@@ -45,7 +46,7 @@ public class UsuarioController {
     
     @PostMapping("/professor")
     @Operation(summary = "Criar usuário para professor", description = "Cria uma conta de usuário vinculada a um professor existente")
-    public ResponseEntity<UsuarioResponse> criarUsuarioProfessor(@Valid @RequestBody CriarUsuarioProfessorRequest request) {
+    public ResponseEntity<?> criarUsuarioProfessor(@Valid @RequestBody CriarUsuarioProfessorRequest request) {
         try {
             Usuario usuario = usuarioService.criarUsuarioProfessor(
                 request.getUsername(), 
@@ -55,7 +56,12 @@ public class UsuarioController {
             
             return ResponseEntity.status(HttpStatus.CREATED).body(converterParaResponse(usuario));
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
+            // Corrigir construtor para usar os parâmetros corretos
+            ErrorResponse errorResponse = new ErrorResponse(
+                HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                "Erro ao criar usuário: " + e.getMessage()
+            );
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
         }
     }
     
@@ -66,7 +72,11 @@ public class UsuarioController {
             usuarioService.resetarSenha(id, request.getNovaSenha());
             return ResponseEntity.ok(new SuccessResponse("Senha resetada com sucesso"));
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
+            ErrorResponse errorResponse = new ErrorResponse(
+                HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                e.getMessage()
+            );
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
         }
     }
     
@@ -77,7 +87,11 @@ public class UsuarioController {
             usuarioService.excluirUsuario(id);
             return ResponseEntity.ok(new SuccessResponse("Usuário excluído com sucesso"));
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
+            ErrorResponse errorResponse = new ErrorResponse(
+                HttpStatus.NOT_FOUND.value(),
+                "Usuário não encontrado"
+            );
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
         }
     }
     

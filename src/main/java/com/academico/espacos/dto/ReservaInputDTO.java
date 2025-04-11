@@ -4,7 +4,6 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.FutureOrPresent;
 
 import lombok.AllArgsConstructor;
@@ -32,7 +31,4 @@ public class ReservaInputDTO {
     @NotNull(message = "A hora final é obrigatória")
     private LocalTime horaFinal;
     
-    @NotNull(message = "A finalidade da reserva é obrigatória")
-    @Size(min = 3, max = 255, message = "A finalidade deve ter entre 3 e 255 caracteres")
-    private String finalidade;
 }

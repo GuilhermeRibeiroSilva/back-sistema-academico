@@ -3,6 +3,7 @@ package com.academico.espacos.controller;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.http.HttpStatus;
 import com.academico.espacos.model.EspacoAcademico;
 import com.academico.espacos.service.EspacoAcademicoService;
 import com.academico.espacos.repository.ReservaRepository;
@@ -52,7 +53,11 @@ public class EspacoAcademicoController {
         } catch (ResourceNotFoundException e) {
             return ResponseEntity.notFound().build();
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
+            ErrorResponse response = new ErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                e.getMessage()
+            );
+            return ResponseEntity.badRequest().body(response);
         }
     }
 
@@ -74,7 +79,11 @@ public class EspacoAcademicoController {
             service.excluir(id);
             return ResponseEntity.ok().build();
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
+            ErrorResponse response = new ErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                e.getMessage()
+            );
+            return ResponseEntity.badRequest().body(response);
         }
     }
 

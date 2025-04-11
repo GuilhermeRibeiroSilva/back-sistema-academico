@@ -11,6 +11,7 @@ import com.academico.espacos.repository.EspacoAcademicoRepository;
 import com.academico.espacos.repository.ReservaRepository;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -98,8 +99,12 @@ public class EspacoAcademicoService {
     public List<EspacoAcademico> listarDisponiveisParaReserva(LocalDate data, String horaInicial, String horaFinal) {
         return repository.findByDisponivelTrue().stream()
             .filter(espaco -> {
+                // Converta as Strings para LocalTime antes de chamar o método
+                LocalTime horaInicialTime = LocalTime.parse(horaInicial);
+                LocalTime horaFinalTime = LocalTime.parse(horaFinal);
+                
                 List<Reserva> reservasConflitantes = reservaRepository
-                    .findConflictingReservations(espaco.getId(), data, horaInicial, horaFinal);
+                    .findConflictingReservations(espaco.getId(), data, horaInicialTime, horaFinalTime);
                 return reservasConflitantes.isEmpty();
             })
             .toList();

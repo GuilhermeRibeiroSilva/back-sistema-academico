@@ -4,6 +4,7 @@ import com.academico.espacos.security.CustomUserDetailsService;
 import com.academico.espacos.security.JwtAuthenticationFilter;
 import com.academico.espacos.security.JwtTokenProvider;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -25,17 +26,15 @@ import java.util.List;
 @EnableWebSecurity
 public class SecurityConfig {
 
-    private final JwtTokenProvider jwtTokenProvider;
-    private final CustomUserDetailsService customUserDetailsService;
-
-    public SecurityConfig(JwtTokenProvider jwtTokenProvider, CustomUserDetailsService customUserDetailsService) {
-        this.jwtTokenProvider = jwtTokenProvider;
-        this.customUserDetailsService = customUserDetailsService;
-    }
+    @Autowired
+    private JwtTokenProvider tokenProvider;
+    
+    @Autowired
+    private CustomUserDetailsService userDetailsService;
 
     @Bean
-    private JwtAuthenticationFilter jwtAuthenticationFilter() {
-        return new JwtAuthenticationFilter(jwtTokenProvider, customUserDetailsService);
+    public JwtAuthenticationFilter jwtAuthenticationFilter() {
+        return new JwtAuthenticationFilter(tokenProvider, userDetailsService);
     }
 
     @Bean

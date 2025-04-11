@@ -23,7 +23,6 @@ public class ReservaDTO {
     private LocalDate data;
     private String horaInicial;
     private String horaFinal;
-    private String finalidade;
     private StatusReserva status;
     private LocalDateTime dataCriacao;
     private LocalDateTime dataAtualizacao;
@@ -59,7 +58,6 @@ public class ReservaDTO {
         }
         
         dto.setData(reserva.getData());
-        dto.setFinalidade(reserva.getFinalidade());
         dto.setStatus(reserva.getStatus());
         dto.setDataCriacao(reserva.getDataCriacao());
         dto.setDataAtualizacao(reserva.getDataAtualizacao());
@@ -82,7 +80,6 @@ public class ReservaDTO {
         Reserva reserva = new Reserva();
         reserva.setId(this.id);
         reserva.setData(this.data);
-        reserva.setFinalidade(this.finalidade);
         reserva.setStatus(this.status != null ? this.status : StatusReserva.PENDENTE);
         reserva.setDataCriacao(this.dataCriacao);
         reserva.setDataAtualizacao(this.dataAtualizacao);

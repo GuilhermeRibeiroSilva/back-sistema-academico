@@ -12,6 +12,7 @@ import com.academico.espacos.model.Professor;
 import com.academico.espacos.model.Reserva;
 import com.academico.espacos.repository.ProfessorRepository;
 import com.academico.espacos.repository.ReservaRepository;
+import com.academico.espacos.repository.UsuarioRepository;
 
 @Service
 public class ProfessorService {
@@ -21,6 +22,9 @@ public class ProfessorService {
     
     @Autowired
     private ReservaRepository reservaRepository;
+    
+    @Autowired
+    private UsuarioRepository usuarioRepository;
     
     public List<Professor> listarTodos() {
         return repository.findAll();
@@ -64,6 +68,12 @@ public class ProfessorService {
             reservaRepository.deleteAll(reservas);
         }
         
+        // Primeiro encontrar e excluir o usuário associado ao professor (se existir)
+        usuarioRepository.findByProfessor(professor).ifPresent(usuario -> {
+            usuarioRepository.delete(usuario);
+        });
+        
+        // Agora podemos excluir o professor com segurança
         repository.delete(professor);
     }
     

@@ -89,8 +89,8 @@ public class ReservaController {
             
             // Validar horários
             if (input.getHoraInicial() != null && input.getHoraFinal() != null) {
-                LocalTime horaInicial = LocalTime.parse(input.getHoraInicial());
-                LocalTime horaFinal = LocalTime.parse(input.getHoraFinal());
+                LocalTime horaInicial = input.getHoraInicial();
+                LocalTime horaFinal = input.getHoraFinal();
                 
                 if (horaInicial.isAfter(horaFinal)) {
                     logger.error("Horários inválidos: {} > {}", input.getHoraInicial(), input.getHoraFinal());
@@ -195,8 +195,8 @@ public class ReservaController {
             
             boolean disponivel = reservaService.verificarDisponibilidade(
                 dto.getData(), 
-                dto.getHoraInicial(), 
-                dto.getHoraFinal(), 
+                dto.getHoraInicial(),  // use diretamente se já for LocalTime
+                dto.getHoraFinal(),    // use diretamente se já for LocalTime
                 dto.getEspacoId(),
                 dto.getReservaId()
             );

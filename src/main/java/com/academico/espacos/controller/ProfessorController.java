@@ -88,7 +88,11 @@ public class ProfessorController {
         } catch (ResourceNotFoundException e) {
             return ResponseEntity.notFound().build();
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(new ErrorResponse("Erro ao atualizar professor: " + e.getMessage()));
+            ErrorResponse response = new ErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "Erro ao atualizar professor: " + e.getMessage()
+            );
+            return ResponseEntity.badRequest().body(response);
         }
     }
     
@@ -109,7 +113,11 @@ public class ProfessorController {
         } catch (ResourceNotFoundException e) {
             return ResponseEntity.notFound().build();
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(new ErrorResponse("Erro ao listar reservas: " + e.getMessage()));
+            ErrorResponse response = new ErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "Erro ao listar reservas: " + e.getMessage()
+            );
+            return ResponseEntity.badRequest().body(response);
         }
     }
     
@@ -130,9 +138,17 @@ public class ProfessorController {
         } catch (ResourceNotFoundException e) {
             return ResponseEntity.notFound().build();
         } catch (IllegalStateException e) {
-            return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
+            ErrorResponse response = new ErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                e.getMessage()
+            );
+            return ResponseEntity.badRequest().body(response);
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(new ErrorResponse("Erro ao excluir professor: " + e.getMessage()));
+            ErrorResponse response = new ErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "Erro ao excluir professor: " + e.getMessage()
+            );
+            return ResponseEntity.badRequest().body(response);
         }
     }
 }
