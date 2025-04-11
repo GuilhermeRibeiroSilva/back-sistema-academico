@@ -1,16 +1,20 @@
 package com.academico.espacos.model;
 
 import com.academico.espacos.model.enums.Perfil;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import jakarta.persistence.*;
-import java.util.Collection;
-import java.util.Collections;
 
+/**
+ * Entidade que representa um usuário do sistema.
+ * Cada usuário pode ter um perfil específico (ADMIN ou PROFESSOR).
+ */
 @Entity
 @Table(name = "usuarios")
 public class Usuario {
+
+    public static final String ROLE_ADMIN = "ROLE_ADMIN";
+    public static final String ROLE_PROFESSOR = "ROLE_PROFESSOR";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -55,20 +59,20 @@ public class Usuario {
         this.password = password;
     }
 
+    /**
+     * Obtém o perfil do usuário com base no role definido
+     * @return Perfil do usuário (ADMIN ou PROFESSOR)
+     */
     public Perfil getPerfil() {
-        if (role != null && role.contains("ADMIN")) {
-            return Perfil.ADMIN;
-        } else {
-            return Perfil.PROFESSOR;
-        }
+        return ROLE_ADMIN.equals(role) ? Perfil.ADMIN : Perfil.PROFESSOR;
     }
 
+    /**
+     * Define o perfil do usuário, atualizando o role correspondente
+     * @param perfil Perfil a ser atribuído ao usuário
+     */
     public void setPerfil(Perfil perfil) {
-        if (perfil == Perfil.ADMIN) {
-            this.role = "ROLE_ADMIN";
-        } else {
-            this.role = "ROLE_PROFESSOR";
-        }
+        this.role = perfil == Perfil.ADMIN ? ROLE_ADMIN : ROLE_PROFESSOR;
     }
 
     public String getRole() {
@@ -92,7 +96,7 @@ public class Usuario {
      * @return true se o usuário tiver o perfil de PROFESSOR
      */
     public boolean isProfessor() {
-        return this.getPerfil() == Perfil.PROFESSOR;
+        return getPerfil() == Perfil.PROFESSOR;
     }
 
     /**
@@ -100,6 +104,16 @@ public class Usuario {
      * @return true se o usuário tiver o perfil de ADMIN
      */
     public boolean isAdmin() {
-        return this.getPerfil() == Perfil.ADMIN;
+        return getPerfil() == Perfil.ADMIN;
+    }
+    
+    @Override
+    public String toString() {
+        return "Usuario{" +
+                "id=" + id +
+                ", username='" + username + '\'' +
+                ", role='" + role + '\'' +
+                ", perfil=" + getPerfil() +
+                '}';
     }
 }

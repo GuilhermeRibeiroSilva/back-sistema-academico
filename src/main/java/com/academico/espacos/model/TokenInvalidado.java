@@ -1,7 +1,7 @@
 package com.academico.espacos.model;
 
 import jakarta.persistence.*;
-import java.util.Date;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "tokens_invalidados")
@@ -14,7 +14,17 @@ public class TokenInvalidado {
     private String token;
 
     @Column(nullable = false)
-    private Date expiracaoToken;
+    private LocalDateTime expiracaoToken;
+    
+    // Construtores
+    public TokenInvalidado() {
+        // Construtor padrão necessário para JPA
+    }
+    
+    public TokenInvalidado(String token, LocalDateTime expiracaoToken) {
+        this.token = token;
+        this.expiracaoToken = expiracaoToken;
+    }
 
     // Getters e Setters
     public Long getId() {
@@ -33,11 +43,11 @@ public class TokenInvalidado {
         this.token = token;
     }
 
-    public Date getExpiracaoToken() {
+    public LocalDateTime getExpiracaoToken() {
         return expiracaoToken;
     }
 
-    public void setExpiracaoToken(Date expiracaoToken) {
+    public void setExpiracaoToken(LocalDateTime expiracaoToken) {
         this.expiracaoToken = expiracaoToken;
     }
 }

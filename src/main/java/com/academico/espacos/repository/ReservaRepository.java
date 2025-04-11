@@ -13,133 +13,66 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 
+/**
+ * Repositório para gerenciamento das entidades Reserva
+ */
 @Repository
 public interface ReservaRepository extends JpaRepository<Reserva, Long> {
 
-    @Query("SELECT r FROM Reserva r WHERE r.espacoAcademico.id = :espacoId " + 
-           "AND r.data = :data " +
-           "AND ((r.horaInicial < :horaFinal AND r.horaFinal > :horaInicial)) " + 
-           "AND r.status != 'CANCELADO'")
-    List<Reserva> findReservasConflitantes(@Param("espacoId") Long espacoId, @Param("data") LocalDate data, @Param("horaInicial") LocalTime horaInicial, @Param("horaFinal") LocalTime horaFinal);
-
-    // Método corrigido para PostgreSQL
-    @Query(value = "SELECT * FROM reservas r " +
-           "WHERE r.espaco_id = :espacoId " +
-           "AND r.data = :data " +
-           "AND r.hora_inicial < CAST(:horaFinal AS TIME) " +
-           "AND r.hora_final > CAST(:horaInicial AS TIME) " +
-           "AND r.status <> 'CANCELADO'", 
-           nativeQuery = true)
-    List<Reserva> findConflictingReservations(
-        @Param("espacoId") Long espacoId,
-        @Param("data") LocalDate data,
-        @Param("horaInicial") String horaInicial,
-        @Param("horaFinal") String horaFinal
-    );
-
-    @Query("SELECT r FROM Reserva r ORDER BY r.data ASC, r.horaInicial ASC")
-    List<Reserva> findAllOrderByDataAndHoraInicial();
-
-    List<Reserva> findByProfessorIdAndData(Long professorId, LocalDate data);
-
-    List<Reserva> findByEspacoAcademicoId(Long espacoAcademicoId);
-
-    List<Reserva> findByProfessorId(Long professorId);
-
-    @Query("SELECT r FROM Reserva r WHERE r.data = :data AND r.status = :status")
-    List<Reserva> findByDataAndStatus(LocalDate data, StatusReserva status);
-
-    @Query("SELECT r FROM Reserva r WHERE r.data = :data AND r.status IN (:status)")
-    List<Reserva> findByDataAndStatusIn(LocalDate data, List<StatusReserva> status);
-
-    @Query("UPDATE Reserva r SET r.status = :novoStatus WHERE r.id = :id")
-    @Modifying
-    void atualizarStatus(@Param("id") Long id, @Param("novoStatus") StatusReserva novoStatus);
-
+    // ========== CONSULTAS DE CONFLITO DE HORÁRIOS ==========
+    
     /**
-     * Busca reservas que não têm o status informado
-     */
-    List<Reserva> findByStatusNot(StatusReserva status);
-
-    /**
-     * Busca reservas de um professor específico que não tenham o status informado
-     */
-    List<Reserva> findByProfessorAndStatusNot(Professor professor, StatusReserva status);
-
-    /**
-     * Verifica se uma reserva existe e tem status UTILIZADO
-     */
-    @Query("SELECT COUNT(r) > 0 FROM Reserva r WHERE r.id = :id AND r.status = 'UTILIZADO'")
-    boolean existsByIdAndStatusUtilizado(@Param("id") Long id);
-
-    /**
-     * Verifica se existem reservas utilizadas para o espaço fornecido
-     */
-    @Query("SELECT COUNT(r) > 0 FROM Reserva r WHERE r.espacoAcademico.id = :espacoId AND r.status = 'UTILIZADO'")
-    boolean existsByEspacoAcademicoIdAndStatusUtilizado(@Param("espacoId") Long espacoId);
-
-    /**
-     * Implementação manual do método para compatibilidade
-     */
-    @Query("SELECT COUNT(r) > 0 FROM Reserva r WHERE r.espacoAcademico.id = :id AND r.status = 'UTILIZADO'")
-    boolean existsByIdAndUtilizadoTrue(@Param("id") Long id);
-
-    // Método para encontrar reservas ativas (não canceladas)
-    @Query("SELECT r FROM Reserva r WHERE r.status != 'CANCELADO' ORDER BY r.data ASC, r.horaInicial ASC")
-    List<Reserva> findAllActiveOrderedByDateTime();
-
-
-    /**
-     * Busca reservas por espaço acadêmico e data
-     */
-    List<Reserva> findByEspacoAcademicoIdAndData(Long espacoId, LocalDate data);
-
-    /**
-     * Verifica se existe alguma reserva para o espaço acadêmico na data/hora especificada
+     * Verifica se existe conflito de horário para um espaço acadêmico específico
      */
     @Query("SELECT COUNT(r) > 0 FROM Reserva r " +
            "WHERE r.espacoAcademico.id = :espacoId " +
            "AND r.data = :data " +
            "AND r.status != 'CANCELADO' " +
-           "AND (" +
-           "  (r.horaInicial <= :horaInicial AND r.horaFinal > :horaInicial) OR " +
-           "  (r.horaInicial < :horaFinal AND r.horaFinal >= :horaFinal) OR " +
-           "  (r.horaInicial >= :horaInicial AND r.horaFinal <= :horaFinal)" +
-           ")")
-    boolean existsReservaConflitante(
+           "AND ((r.horaInicial < :horaFinal AND r.horaFinal > :horaInicial))")
+    boolean existsConflitoPorEspaco(
         @Param("espacoId") Long espacoId, 
         @Param("data") LocalDate data, 
         @Param("horaInicial") LocalTime horaInicial, 
         @Param("horaFinal") LocalTime horaFinal
     );
-
+    
     /**
-     * Verifica se existe alguma reserva para o professor na data/hora especificada
+     * Retorna as reservas conflitantes para um determinado espaço e horário
+     */
+    @Query("SELECT r FROM Reserva r WHERE r.espacoAcademico.id = :espacoId " + 
+           "AND r.data = :data " +
+           "AND ((r.horaInicial < :horaFinal AND r.horaFinal > :horaInicial)) " + 
+           "AND r.status != 'CANCELADO'")
+    List<Reserva> findReservasConflitantes(
+        @Param("espacoId") Long espacoId, 
+        @Param("data") LocalDate data, 
+        @Param("horaInicial") LocalTime horaInicial, 
+        @Param("horaFinal") LocalTime horaFinal
+    );
+    
+    /**
+     * Verifica se existe conflito de horário para um professor específico
      */
     @Query("SELECT COUNT(r) > 0 FROM Reserva r " +
            "WHERE r.professor.id = :professorId " +
            "AND r.data = :data " +
            "AND r.status != 'CANCELADO' " +
-           "AND (" +
-           "  (r.horaInicial <= :horaInicial AND r.horaFinal > :horaInicial) OR " +
-           "  (r.horaInicial < :horaFinal AND r.horaFinal >= :horaFinal) OR " +
-           "  (r.horaInicial >= :horaInicial AND r.horaFinal <= :horaFinal)" +
-           ")")
-    boolean existsReservaProfessorConflitante(
+           "AND ((r.horaInicial < :horaFinal AND r.horaFinal > :horaInicial))")
+    boolean existsConflitoPorProfessor(
         @Param("professorId") Long professorId, 
         @Param("data") LocalDate data, 
         @Param("horaInicial") LocalTime horaInicial, 
         @Param("horaFinal") LocalTime horaFinal
     );
-
+    
     /**
-     * Conta reservas que conflitam com os parâmetros informados (para verificar disponibilidade)
+     * Conta reservas que conflitam com os parâmetros informados (permitindo excluir uma reserva específica)
      */
     @Query("SELECT COUNT(r) FROM Reserva r " +
            "WHERE r.data = :data " +
            "AND r.espacoAcademico.id = :espacoId " +
            "AND r.status != 'CANCELADO' " +
-           "AND ((r.horaInicial <= :horaFinal AND r.horaFinal >= :horaInicial)) " +
+           "AND ((r.horaInicial < :horaFinal AND r.horaFinal > :horaInicial)) " +
            "AND (r.id != :reservaIdExcluir OR :reservaIdExcluir IS NULL)")
     long countConflitos(
         @Param("data") LocalDate data,
@@ -149,48 +82,49 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
         @Param("reservaIdExcluir") Long reservaIdExcluir
     );
 
+    // ========== CONSULTAS POR ORDENAÇÃO ==========
+    
     /**
-     * Busca reservas por status
+     * Retorna todas as reservas ordenadas por data e hora
      */
-    List<Reserva> findByStatus(StatusReserva status);
-
+    @Query("SELECT r FROM Reserva r ORDER BY r.data ASC, r.horaInicial ASC")
+    List<Reserva> findAllOrderByDataAndHoraInicial();
+    
     /**
-     * Busca reservas por data
+     * Retorna todas as reservas ativas (não canceladas) ordenadas por data e hora
      */
-    List<Reserva> findByData(LocalDate data);
+    @Query("SELECT r FROM Reserva r WHERE r.status != 'CANCELADO' ORDER BY r.data ASC, r.horaInicial ASC")
+    List<Reserva> findAllActiveOrderedByDateTime();
 
+    // ========== CONSULTAS POR DATA/HORA ==========
+    
     /**
-     * Busca reservas para uma data específica
-     * que estão dentro de um intervalo de horas
+     * Busca reservas para uma data específica dentro de um intervalo de horas
      */
     @Query("SELECT r FROM Reserva r " +
            "WHERE r.data = :data " +
            "AND r.status != 'CANCELADO' " +
-           "AND (" +
-           "  (r.horaInicial >= :horaInicial AND r.horaInicial < :horaFinal) OR " +
-           "  (r.horaFinal > :horaInicial AND r.horaFinal <= :horaFinal) OR " +
-           "  (r.horaInicial <= :horaInicial AND r.horaFinal >= :horaFinal)" +
-           ")")
+           "AND ((r.horaInicial < :horaFinal AND r.horaFinal > :horaInicial))")
     List<Reserva> findReservasEmIntervalo(
         @Param("data") LocalDate data,
         @Param("horaInicial") LocalTime horaInicial,
         @Param("horaFinal") LocalTime horaFinal
     );
-
+    
     /**
-     * Busca reservas com um determinado status, na data especificada, 
-     * onde a hora inicial é menor ou igual à hora atual e a hora final é maior que a hora atual
+     * Busca reservas em andamento (com status especificado, na data atual, 
+     * onde a hora está entre o início e fim da reserva)
      */
     List<Reserva> findByStatusAndDataAndHoraInicialLessThanEqualAndHoraFinalGreaterThan(
         StatusReserva status, 
         LocalDate data, 
-        LocalTime horaAtualInicio, 
-        LocalTime horaAtualFim
+        LocalTime horaAtual, 
+        LocalTime horaAtual2
     );
-
+    
     /**
-     * Busca reservas com um determinado status, na data especificada, 
-     * onde a hora final já passou
+     * Busca reservas finalizadas (com status especificado, na data atual,
+     * onde a hora fim já passou)
      */
     List<Reserva> findByStatusAndDataAndHoraFinalLessThanEqual(
         StatusReserva status, 
@@ -198,8 +132,101 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
         LocalTime horaAtual
     );
 
+    // ========== CONSULTAS POR RELACIONAMENTOS ==========
+    
+    /**
+     * Busca reservas por professor e data
+     */
+    List<Reserva> findByProfessorIdAndData(Long professorId, LocalDate data);
+    
+    /**
+     * Busca reservas por espaço acadêmico
+     */
+    List<Reserva> findByEspacoAcademicoId(Long espacoAcademicoId);
+    
+    /**
+     * Busca reservas por professor
+     */
+    List<Reserva> findByProfessorId(Long professorId);
+    
+    /**
+     * Busca reservas por espaço acadêmico e data
+     */
+    List<Reserva> findByEspacoAcademicoIdAndData(Long espacoId, LocalDate data);
+
+    // ========== CONSULTAS POR STATUS ==========
+    
+    /**
+     * Busca reservas por data e status
+     */
+    @Query("SELECT r FROM Reserva r WHERE r.data = :data AND r.status = :status")
+    List<Reserva> findByDataAndStatus(LocalDate data, StatusReserva status);
+    
+    /**
+     * Busca reservas por data e múltiplos status
+     */
+    @Query("SELECT r FROM Reserva r WHERE r.data = :data AND r.status IN (:status)")
+    List<Reserva> findByDataAndStatusIn(LocalDate data, List<StatusReserva> status);
+    
+    /**
+     * Busca reservas que não têm o status informado
+     */
+    List<Reserva> findByStatusNot(StatusReserva status);
+    
+    /**
+     * Busca reservas de um professor específico que não tenham o status informado
+     */
+    List<Reserva> findByProfessorAndStatusNot(Professor professor, StatusReserva status);
+    
+    /**
+     * Busca reservas por status
+     */
+    List<Reserva> findByStatus(StatusReserva status);
+    
+    /**
+     * Busca reservas por data
+     */
+    List<Reserva> findByData(LocalDate data);
+    
     /**
      * Busca reservas por status que tenham data anterior à data informada
      */
     List<Reserva> findByDataBeforeAndStatus(LocalDate data, StatusReserva status);
+
+    // ========== VERIFICAÇÃO DE EXISTÊNCIA ==========
+    
+    /**
+     * Verifica se uma reserva existe e tem status UTILIZADO
+     */
+    @Query("SELECT COUNT(r) > 0 FROM Reserva r WHERE r.id = :id AND r.status = 'UTILIZADO'")
+    boolean existsByIdAndStatusUtilizado(@Param("id") Long id);
+    
+    /**
+     * Verifica se existem reservas utilizadas para o espaço fornecido
+     */
+    @Query("SELECT COUNT(r) > 0 FROM Reserva r WHERE r.espacoAcademico.id = :espacoId AND r.status = 'UTILIZADO'")
+    boolean existsByEspacoAcademicoIdAndStatusUtilizado(@Param("espacoId") Long espacoId);
+
+    // ========== OPERAÇÕES DE MODIFICAÇÃO ==========
+    
+    /**
+     * Atualiza o status de uma reserva
+     */
+    @Query("UPDATE Reserva r SET r.status = :novoStatus WHERE r.id = :id")
+    @Modifying
+    void atualizarStatus(@Param("id") Long id, @Param("novoStatus") StatusReserva novoStatus);
+
+    /**
+     * Retorna as reservas conflitantes para um determinado espaço e horário
+     */
+    @Query("SELECT r FROM Reserva r WHERE r.espacoAcademico.id = :espacoId " + 
+           "AND r.data = :data " +
+           "AND ((r.horaInicial < :horaFinal AND r.horaFinal > :horaInicial)) " + 
+           "AND r.status != 'CANCELADO'")
+    List<Reserva> findConflictingReservations(
+        @Param("espacoId") Long espacoId, 
+        @Param("data") LocalDate data, 
+        @Param("horaInicial") LocalTime horaInicial, 
+        @Param("horaFinal") LocalTime horaFinal
+    );
 }

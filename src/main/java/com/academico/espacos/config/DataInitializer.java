@@ -2,19 +2,26 @@ package com.academico.espacos.config;
 
 import com.academico.espacos.model.Usuario;
 import com.academico.espacos.repository.UsuarioRepository;
+import jakarta.annotation.PostConstruct;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.Query;
-import jakarta.annotation.PostConstruct;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 @Configuration
 public class DataInitializer {
 
+    private static final Logger logger = Logger.getLogger(DataInitializer.class.getName());
+    private static final String ADMIN_USERNAME = "admin@admin.com";
+    private static final String ADMIN_PASSWORD = "admin123";
+    private static final String[] STATUS_VALIDOS = {"PENDENTE", "EM_USO", "UTILIZADO", "CANCELADO"};
+    
     @Autowired
     private UsuarioRepository usuarioRepository;
 
@@ -26,94 +33,111 @@ public class DataInitializer {
 
     @Bean
     public CommandLineRunner initData() {
-        return args -> {
-            try {
-                // Verifica se já existe um usuário admin
-                if (usuarioRepository.findByUsername("admin@admin.com").isEmpty()) {
-                    // Cria o usuário admin
-                    Usuario admin = new Usuario();
-                    admin.setUsername("admin@admin.com");
-                    admin.setPassword(passwordEncoder.encode("admin123"));
-                    admin.setRole("ROLE_ADMIN");
-                    
-                    usuarioRepository.save(admin);
-                    
-                    System.out.println("Usuário admin criado com sucesso!");
-                    System.out.println("Username: admin@admin.com");
-                    System.out.println("Senha: admin123");
-                } else {
-                    System.out.println("Usuário admin já existe, pulando criação.");
-                }
-            } catch (Exception e) {
-                System.err.println("Erro ao inicializar dados: " + e.getMessage());
-                e.printStackTrace();
+        return args -> criarUsuarioAdminSeNecessario();
+    }
+
+    private void criarUsuarioAdminSeNecessario() {
+        try {
+            if (usuarioRepository.findByUsername(ADMIN_USERNAME).isEmpty()) {
+                Usuario admin = new Usuario();
+                admin.setUsername(ADMIN_USERNAME);
+                admin.setPassword(passwordEncoder.encode(ADMIN_PASSWORD));
+                admin.setRole("ROLE_ADMIN");
+                
+                usuarioRepository.save(admin);
+                
+                logger.info("Usuário admin criado com sucesso!");
+                logger.info("Username: " + ADMIN_USERNAME);
+                logger.info("Senha: " + ADMIN_PASSWORD);
+            } else {
+                logger.info("Usuário admin já existe, pulando criação.");
             }
-        };
+        } catch (Exception e) {
+            logError("Erro ao inicializar dados", e);
+        }
     }
 
     @PostConstruct
-    @Transactional // Adicionado para corrigir o erro
+    @Transactional
     public void verificarBancoDeDados() {
         try {
-            // Primeiro verifica se a tabela existe
-            boolean tabelaExiste = verificarSeTabelaExiste("reservas");
-            if (!tabelaExiste) {
-                System.out.println("Tabela 'reservas' ainda não foi criada. Ignorando verificações.");
+            final String tabelaReservas = "reservas";
+            final String colunaStatus = "status";
+            
+            if (!verificarSeTabelaExiste(tabelaReservas)) {
+                logger.info("Tabela 'reservas' ainda não foi criada. Ignorando verificações.");
                 return;
             }
             
-            // Verifica se a coluna status existe
-            Query query = entityManager.createNativeQuery(
-                "SELECT column_name, data_type FROM information_schema.columns " +
-                "WHERE table_name = 'reservas' AND column_name = 'status'"
-            );
-            
-            if (query.getResultList().isEmpty()) {
-                System.out.println("AVISO: A coluna 'status' não existe na tabela 'reservas'. Ignorando verificações adicionais.");
+            if (!verificarSeColunaExiste(tabelaReservas, colunaStatus)) {
+                logger.info("AVISO: A coluna 'status' não existe na tabela 'reservas'. Ignorando verificações adicionais.");
                 return;
             }
             
-            // Verifica se existem registros com status inválido
-            Query invalidStatusQuery = entityManager.createNativeQuery(
-                "SELECT COUNT(*) FROM reservas WHERE status IS NOT NULL AND status NOT IN " +
-                "('PENDENTE', 'EM_USO', 'UTILIZADO', 'CANCELADO')"
-            );
-            
-            Long invalidCount = ((Number) invalidStatusQuery.getSingleResult()).longValue();
-            if (invalidCount > 0) {
-                System.out.println("Encontrados " + invalidCount + " registros com status inválido. Corrigindo para 'PENDENTE'...");
-                // Corrige registros com status inválido
-                int updated = entityManager.createNativeQuery(
-                    "UPDATE reservas SET status = 'PENDENTE' WHERE status IS NOT NULL AND status NOT IN " +
-                    "('PENDENTE', 'EM_USO', 'UTILIZADO', 'CANCELADO')"
-                ).executeUpdate();
-                
-                System.out.println(updated + " registros atualizados com sucesso.");
-            } else {
-                System.out.println("Nenhum registro com status inválido encontrado.");
-            }
+            corrigirStatusInvalidos(tabelaReservas);
             
         } catch (Exception e) {
-            System.err.println("AVISO: Erro ao verificar estrutura do banco de dados: " + e.getMessage());
-            e.printStackTrace();
-            // Não lançamos a exceção para permitir que a aplicação continue iniciando
+            logError("AVISO: Erro ao verificar estrutura do banco de dados", e);
         }
     }
     
-    // Método auxiliar para verificar se uma tabela existe
     private boolean verificarSeTabelaExiste(String tabela) {
         try {
             Query query = entityManager.createNativeQuery(
-                "SELECT COUNT(*) FROM information_schema.tables " +
-                "WHERE table_name = :tabela"
-            );
+                "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = :tabela");
             query.setParameter("tabela", tabela);
             
             Number count = (Number) query.getSingleResult();
             return count.intValue() > 0;
         } catch (Exception e) {
-            System.err.println("Erro ao verificar existência da tabela: " + e.getMessage());
+            logError("Erro ao verificar existência da tabela", e);
             return false;
         }
+    }
+    
+    private boolean verificarSeColunaExiste(String tabela, String coluna) {
+        try {
+            Query query = entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM information_schema.columns " +
+                "WHERE table_name = :tabela AND column_name = :coluna");
+            query.setParameter("tabela", tabela);
+            query.setParameter("coluna", coluna);
+            
+            Number count = (Number) query.getSingleResult();
+            return count.intValue() > 0;
+        } catch (Exception e) {
+            logError("Erro ao verificar existência da coluna", e);
+            return false;
+        }
+    }
+    
+    private void corrigirStatusInvalidos(String tabela) {
+        try {
+            String statusValidos = String.join("', '", STATUS_VALIDOS);
+            
+            Query invalidStatusQuery = entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM " + tabela + " WHERE status IS NOT NULL AND " +
+                "status NOT IN ('" + statusValidos + "')");
+            
+            Long invalidCount = ((Number) invalidStatusQuery.getSingleResult()).longValue();
+            
+            if (invalidCount > 0) {
+                logger.info("Encontrados " + invalidCount + " registros com status inválido. Corrigindo para 'PENDENTE'...");
+                
+                int updated = entityManager.createNativeQuery(
+                    "UPDATE " + tabela + " SET status = 'PENDENTE' WHERE status IS NOT NULL AND " +
+                    "status NOT IN ('" + statusValidos + "')").executeUpdate();
+                
+                logger.info(updated + " registros atualizados com sucesso.");
+            } else {
+                logger.info("Nenhum registro com status inválido encontrado.");
+            }
+        } catch (Exception e) {
+            logError("Erro ao corrigir status inválidos", e);
+        }
+    }
+    
+    private void logError(String mensagem, Exception e) {
+        logger.log(Level.SEVERE, mensagem + ": " + e.getMessage(), e);
     }
 }

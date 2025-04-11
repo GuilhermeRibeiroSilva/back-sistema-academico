@@ -1,7 +1,17 @@
 package com.academico.espacos.dto;
 
 import com.academico.espacos.model.Usuario;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
+/**
+ * DTO para resposta de login contendo informações do usuário autenticado
+ * e seu token de acesso.
+ */
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class LoginResponse {
     private String token;
     private Long id;
@@ -10,10 +20,12 @@ public class LoginResponse {
     private Long professorId;
     private String professorNome;
 
-    public LoginResponse() {
-        // Construtor vazio
-    }
-
+    /**
+     * Cria uma resposta de login com token e dados do usuário
+     *
+     * @param token Token de autenticação
+     * @param usuario Usuário autenticado
+     */
     public LoginResponse(String token, Usuario usuario) {
         this.token = token;
         this.id = usuario.getId();
@@ -24,53 +36,5 @@ public class LoginResponse {
             this.professorId = usuario.getProfessor().getId();
             this.professorNome = usuario.getProfessor().getNome();
         }
-    }
-
-    public String getToken() {
-        return token;
-    }
-
-    public void setToken(String token) {
-        this.token = token;
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public String getUsername() {
-        return username;
-    }
-
-    public void setUsername(String username) {
-        this.username = username;
-    }
-
-    public String getRole() {
-        return role;
-    }
-
-    public void setRole(String role) {
-        this.role = role;
-    }
-
-    public Long getProfessorId() {
-        return professorId;
-    }
-
-    public void setProfessorId(Long professorId) {
-        this.professorId = professorId;
-    }
-
-    public String getProfessorNome() {
-        return professorNome;
-    }
-
-    public void setProfessorNome(String professorNome) {
-        this.professorNome = professorNome;
     }
 }

@@ -22,50 +22,88 @@ import com.academico.espacos.model.Professor;
 import com.academico.espacos.service.ProfessorService;
 import com.academico.espacos.service.ReservaService;
 
+/**
+ * Controller responsável por gerenciar operações relacionadas aos professores
+ */
 @RestController
 @RequestMapping("/api/professores")
 public class ProfessorController {
 
-    @Autowired
-    private ProfessorService service;
-    
-    @Autowired
-    private ReservaService reservaService;
+    private final ProfessorService professorService;
+    private final ReservaService reservaService;
 
+    @Autowired
+    public ProfessorController(ProfessorService professorService, ReservaService reservaService) {
+        this.professorService = professorService;
+        this.reservaService = reservaService;
+    }
+
+    /**
+     * Cria um novo professor
+     * 
+     * @param professor Dados do professor a ser criado
+     * @return Professor criado com status 201
+     */
     @PostMapping
     public ResponseEntity<Professor> criar(@RequestBody Professor professor) {
-        Professor novoProfessor = service.salvar(professor);
+        Professor novoProfessor = professorService.salvar(professor);
         return ResponseEntity.status(HttpStatus.CREATED).body(novoProfessor);
     }
 
+    /**
+     * Lista todos os professores cadastrados
+     * 
+     * @return Lista de professores
+     */
     @GetMapping
     public ResponseEntity<List<Professor>> listarTodos() {
-        return ResponseEntity.ok(service.listarTodos());
+        return ResponseEntity.ok(professorService.listarTodos());
     }
 
+    /**
+     * Busca professor por ID
+     * 
+     * @param id ID do professor
+     * @return Professor encontrado ou 404 se não existir
+     */
     @GetMapping("/{id}")
     public ResponseEntity<Professor> buscarPorId(@PathVariable Long id) {
-        return service.buscarPorId(id)
+        return professorService.buscarPorId(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    /**
+     * Atualiza os dados de um professor
+     * 
+     * @param id ID do professor a ser atualizado
+     * @param professor Dados atualizados do professor
+     * @return Professor atualizado
+     */
     @PutMapping("/{id}")
-    public ResponseEntity<Professor> atualizar(@PathVariable Long id, @RequestBody Professor professor) {
-        return ResponseEntity.ok(service.atualizar(id, professor));
+    public ResponseEntity<?> atualizar(@PathVariable Long id, @RequestBody Professor professor) {
+        try {
+            Professor professorAtualizado = professorService.atualizar(id, professor);
+            return ResponseEntity.ok(professorAtualizado);
+        } catch (ResourceNotFoundException e) {
+            return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(new ErrorResponse("Erro ao atualizar professor: " + e.getMessage()));
+        }
     }
     
     /**
-     * Busca as reservas de um professor específico
+     * Lista todas as reservas de um professor específico
+     * 
+     * @param id ID do professor
+     * @return Lista de reservas do professor
      */
     @GetMapping("/{id}/reservas")
     public ResponseEntity<?> listarReservasDoProfessor(@PathVariable Long id) {
         try {
-            // Verifica se o professor existe
-            Professor professor = service.buscarPorId(id)
+            professorService.buscarPorId(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Professor não encontrado com id: " + id));
             
-            // Busca as reservas do professor usando o método buscarPorProfessor
             List<ReservaDTO> reservas = reservaService.buscarPorProfessor(id);
             return ResponseEntity.ok(reservas);
         } catch (ResourceNotFoundException e) {
@@ -75,13 +113,19 @@ public class ProfessorController {
         }
     }
     
+    /**
+     * Exclui um professor
+     * 
+     * @param id ID do professor a ser excluído
+     * @param force Flag para forçar exclusão mesmo com reservas vinculadas
+     * @return 200 OK se excluído com sucesso
+     */
     @DeleteMapping("/{id}")
     public ResponseEntity<?> excluir(
             @PathVariable Long id,
             @RequestParam(name = "force", defaultValue = "false") boolean force) {
         try {
-            // Usar novo método no service que aceita o parâmetro force
-            service.excluir(id, force);
+            professorService.excluir(id, force);
             return ResponseEntity.ok().build();
         } catch (ResourceNotFoundException e) {
             return ResponseEntity.notFound().build();

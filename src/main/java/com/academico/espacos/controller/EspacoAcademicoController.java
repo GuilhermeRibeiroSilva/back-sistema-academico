@@ -1,6 +1,5 @@
 package com.academico.espacos.controller;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -16,11 +15,13 @@ import com.academico.espacos.exception.ResourceNotFoundException;
 @PreAuthorize("hasAnyRole('ADMIN', 'PROFESSOR')")
 public class EspacoAcademicoController {
 
-    @Autowired
-    private EspacoAcademicoService service;
-    
-    @Autowired
-    private ReservaRepository reservaRepository;
+    private final EspacoAcademicoService service;
+    private final ReservaRepository reservaRepository;
+
+    public EspacoAcademicoController(EspacoAcademicoService service, ReservaRepository reservaRepository) {
+        this.service = service;
+        this.reservaRepository = reservaRepository;
+    }
 
     @PostMapping
     public ResponseEntity<EspacoAcademico> criar(@RequestBody EspacoAcademico espacoAcademico) {

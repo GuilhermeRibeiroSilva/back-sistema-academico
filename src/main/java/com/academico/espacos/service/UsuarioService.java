@@ -9,11 +9,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
 @Service
 public class UsuarioService {
+
+    private static final Logger logger = LoggerFactory.getLogger(UsuarioService.class);
 
     @Autowired
     private UsuarioRepository usuarioRepository;
@@ -30,8 +34,8 @@ public class UsuarioService {
     
     @Transactional
     public Usuario criarUsuarioProfessor(String username, String password, Long professorId) {
-        // Log para debug
-        System.out.println("Criando usuário professor: " + username + ", Professor ID: " + professorId);
+        // Log utilizando logger apropriado
+        logger.debug("Criando usuário professor: {}, Professor ID: {}", username, professorId);
         
         // Verifica se o username já existe
         if (usuarioRepository.findByUsername(username).isPresent()) {
@@ -71,8 +75,6 @@ public class UsuarioService {
         Usuario usuario = usuarioRepository.findById(usuarioId)
             .orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado"));
         
-        // Com a exclusão em cascata configurada no banco, 
-        // não precisamos excluir manualmente as reservas
         usuarioRepository.delete(usuario);
     }
     

@@ -7,14 +7,12 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.Optional;
 
 public interface TokenInvalidadoRepository extends JpaRepository<TokenInvalidado, Long> {
     Optional<TokenInvalidado> findByToken(String token);
     
-    // Adicionar este método para verificar se o token já existe
     boolean existsByToken(String token);
     
     @Modifying

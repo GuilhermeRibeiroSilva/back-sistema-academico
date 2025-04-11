@@ -30,15 +30,8 @@ public class ProfessorService {
         return repository.findById(id);
     }
     
-    // Adicionar validação de entrada no método salvar
     public Professor salvar(Professor professor) {
-        // Validar campos obrigatórios
-        if (professor.getNome() == null || professor.getNome().trim().isEmpty()) {
-            throw new IllegalArgumentException("O nome do professor é obrigatório");
-        }
-        if (professor.getEscola() == null || professor.getEscola().trim().isEmpty()) {
-            throw new IllegalArgumentException("A escola do professor é obrigatória");
-        }
+        validarProfessor(professor);
         return repository.save(professor);
     }
     
@@ -46,29 +39,19 @@ public class ProfessorService {
         if (!repository.existsById(id)) {
             throw new ResourceNotFoundException("Professor não encontrado com id: " + id);
         }
+        validarProfessor(professorAtualizado);
         professorAtualizado.setId(id);
         return repository.save(professorAtualizado);
     }
     
     @Transactional
     public void excluir(Long id) {
-        Professor professor = repository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("Professor não encontrado com id: " + id));
-        
-        // Verificar se há reservas para este professor
-        List<Reserva> reservas = reservaRepository.findByProfessorId(id);
-        if (!reservas.isEmpty()) {
-            throw new IllegalStateException("Não é possível excluir este professor pois existem reservas associadas a ele");
-        }
-        
-        repository.delete(professor);
+        excluir(id, false);
     }
     
-    // Adicionar opção de exclusão forçada
     @Transactional
     public void excluir(Long id, boolean forceDelete) {
-        Professor professor = repository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("Professor não encontrado com id: " + id));
+        Professor professor = buscarProfessorPorId(id);
         
         // Verificar se há reservas para este professor
         List<Reserva> reservas = reservaRepository.findByProfessorId(id);
@@ -82,5 +65,20 @@ public class ProfessorService {
         }
         
         repository.delete(professor);
+    }
+    
+    // Métodos auxiliares
+    private Professor buscarProfessorPorId(Long id) {
+        return repository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("Professor não encontrado com id: " + id));
+    }
+    
+    private void validarProfessor(Professor professor) {
+        if (professor.getNome() == null || professor.getNome().trim().isEmpty()) {
+            throw new IllegalArgumentException("O nome do professor é obrigatório");
+        }
+        if (professor.getEscola() == null || professor.getEscola().trim().isEmpty()) {
+            throw new IllegalArgumentException("A escola do professor é obrigatória");
+        }
     }
 }

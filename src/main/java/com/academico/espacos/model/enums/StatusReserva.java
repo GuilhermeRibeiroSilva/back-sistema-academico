@@ -6,13 +6,11 @@ package com.academico.espacos.model.enums;
 public enum StatusReserva {
     /**
      * Reserva agendada - aguardando o início do horário
-     * (anteriormente chamado de PENDENTE)
      */
     AGENDADO("PENDENTE"),
     
     /**
      * Status legado mantido para compatibilidade com banco de dados
-     * Referencia o mesmo que AGENDADO
      * @deprecated Use AGENDADO em vez disso
      */
     @Deprecated
@@ -38,24 +36,36 @@ public enum StatusReserva {
      */
     CANCELADO;
     
-    private final String aliasValue;
+    private final String alias;
     
     StatusReserva() {
-        this.aliasValue = null;
+        this.alias = null;
     }
     
-    StatusReserva(String aliasValue) {
-        this.aliasValue = aliasValue;
+    StatusReserva(String alias) {
+        this.alias = alias;
     }
     
+    /**
+     * Converte uma string em um StatusReserva, considerando aliases
+     * 
+     * @param text O texto a ser convertido para StatusReserva
+     * @return O StatusReserva correspondente ou AGENDADO como padrão
+     */
     public static StatusReserva fromString(String text) {
+        if (text == null) {
+            return AGENDADO;
+        }
+        
+        String normalizedText = text.trim().toUpperCase();
+        
         for (StatusReserva status : StatusReserva.values()) {
-            if (status.name().equalsIgnoreCase(text) || 
-                (status.aliasValue != null && status.aliasValue.equalsIgnoreCase(text))) {
+            if (status.name().equals(normalizedText) || 
+                (status.alias != null && status.alias.equals(normalizedText))) {
                 return status;
             }
         }
-        return AGENDADO; // Default para manter comportamento existente
+        return AGENDADO;
     }
     
     /**

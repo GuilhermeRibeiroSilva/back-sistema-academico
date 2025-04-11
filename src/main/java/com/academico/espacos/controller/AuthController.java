@@ -15,8 +15,11 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/auth")
 public class AuthController {
     
-    @Autowired
-    private AuthService authService;
+    private final AuthService authService;
+    
+    public AuthController(AuthService authService) {
+        this.authService = authService;
+    }
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginRequest loginRequest) {
@@ -84,20 +87,17 @@ public class AuthController {
 
     @PostMapping("/logout")
     public ResponseEntity<?> logout(@RequestHeader("Authorization") String authHeader) {
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return ResponseEntity.badRequest().body(new ErrorResponse("Token inválido ou ausente"));
+        }
+        
         try {
-            if (authHeader != null && authHeader.startsWith("Bearer ")) {
-                String token = authHeader.substring(7);
-                authService.logout(token);
-                return ResponseEntity.ok(new SuccessResponse("Logout realizado com sucesso"));
-            } else {
-                return ResponseEntity
-                    .badRequest()
-                    .body(new ErrorResponse("Token inválido ou ausente"));
-            }
+            String token = authHeader.substring(7);
+            authService.logout(token);
+            return ResponseEntity.ok(new SuccessResponse("Logout realizado com sucesso"));
         } catch (Exception e) {
-            return ResponseEntity
-                .badRequest()
-                .body(new ErrorResponse("Erro ao realizar logout: " + e.getMessage()));
+            return ResponseEntity.badRequest()
+                    .body(new ErrorResponse("Erro ao realizar logout: " + e.getMessage()));
         }
     }
 

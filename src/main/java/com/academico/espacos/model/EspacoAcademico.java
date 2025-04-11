@@ -1,5 +1,6 @@
 package com.academico.espacos.model;
 
+import java.util.Objects;
 import jakarta.persistence.*;
 
 @Entity
@@ -23,6 +24,25 @@ public class EspacoAcademico {
     @Column(nullable = false)
     private boolean disponivel = true;
 
+    // Construtores
+    public EspacoAcademico() {
+        // Construtor padrão necessário para JPA
+    }
+    
+    public EspacoAcademico(String sigla, String nome, Integer capacidadeAlunos) {
+        this.sigla = sigla;
+        this.nome = nome;
+        this.capacidadeAlunos = capacidadeAlunos;
+    }
+    
+    public EspacoAcademico(String sigla, String nome, String descricao, Integer capacidadeAlunos, boolean disponivel) {
+        this.sigla = sigla;
+        this.nome = nome;
+        this.descricao = descricao;
+        this.capacidadeAlunos = capacidadeAlunos;
+        this.disponivel = disponivel;
+    }
+
     // Getters e Setters
     public Long getId() {
         return id;
@@ -37,6 +57,9 @@ public class EspacoAcademico {
     }
 
     public void setSigla(String sigla) {
+        if (sigla == null || sigla.trim().isEmpty()) {
+            throw new IllegalArgumentException("A sigla não pode ser nula ou vazia");
+        }
         this.sigla = sigla;
     }
 
@@ -45,6 +68,9 @@ public class EspacoAcademico {
     }
 
     public void setNome(String nome) {
+        if (nome == null || nome.trim().isEmpty()) {
+            throw new IllegalArgumentException("O nome não pode ser nulo ou vazio");
+        }
         this.nome = nome;
     }
 
@@ -61,6 +87,9 @@ public class EspacoAcademico {
     }
 
     public void setCapacidadeAlunos(Integer capacidadeAlunos) {
+        if (capacidadeAlunos == null || capacidadeAlunos < 0) {
+            throw new IllegalArgumentException("A capacidade de alunos deve ser um valor não negativo");
+        }
         this.capacidadeAlunos = capacidadeAlunos;
     }
 
@@ -70,5 +99,29 @@ public class EspacoAcademico {
 
     public void setDisponivel(boolean disponivel) {
         this.disponivel = disponivel;
+    }
+    
+    @Override
+    public String toString() {
+        return "EspacoAcademico{" +
+                "id=" + id +
+                ", sigla='" + sigla + '\'' +
+                ", nome='" + nome + '\'' +
+                ", capacidadeAlunos=" + capacidadeAlunos +
+                ", disponivel=" + disponivel +
+                '}';
+    }
+    
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        EspacoAcademico that = (EspacoAcademico) o;
+        return Objects.equals(id, that.id) || Objects.equals(sigla, that.sigla);
+    }
+    
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, sigla);
     }
 }

@@ -3,15 +3,13 @@ package com.academico.espacos.controller;
 import com.academico.espacos.dto.DisponibilidadeDTO;
 import com.academico.espacos.dto.ReservaDTO;
 import com.academico.espacos.dto.ReservaInputDTO;
-import com.academico.espacos.exception.BusinessException;
-import com.academico.espacos.exception.ResourceNotFoundException;
 import com.academico.espacos.exception.ErrorResponse;
-import com.academico.espacos.model.EspacoAcademico; // Adicionado import para EspacoAcademico
+import com.academico.espacos.model.EspacoAcademico;
 import com.academico.espacos.model.Reserva;
 import com.academico.espacos.model.Usuario;
 import com.academico.espacos.model.enums.Perfil;
 import com.academico.espacos.model.enums.StatusReserva;
-import com.academico.espacos.repository.EspacoAcademicoRepository; // Adicionado import para o repositório
+import com.academico.espacos.repository.EspacoAcademicoRepository;
 import com.academico.espacos.service.ReservaService;
 import com.academico.espacos.service.UsuarioService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,6 +33,8 @@ import org.slf4j.LoggerFactory;
 @RequestMapping("/api/reservas")
 public class ReservaController {
     
+    private static final Logger logger = LoggerFactory.getLogger(ReservaController.class);
+    
     @Autowired
     private ReservaService reservaService;
     
@@ -42,14 +42,10 @@ public class ReservaController {
     private UsuarioService usuarioService;
     
     @Autowired
-    private EspacoAcademicoRepository espacoRepository; // Adicionado o repositório de espaços
-    
-    private static final Logger logger = LoggerFactory.getLogger(ReservaController.class);
+    private EspacoAcademicoRepository espacoRepository;
     
     /**
-     * Lista todas as reservas
-     * Para admin: todas as reservas
-     * Para professor: apenas suas reservas
+     * Lista todas as reservas baseado no perfil do usuário logado
      */
     @GetMapping
     public ResponseEntity<List<ReservaDTO>> listar() {
@@ -70,9 +66,7 @@ public class ReservaController {
         Usuario usuarioLogado = getUsuarioLogado();
         ReservaDTO reserva = reservaService.buscarPorId(id);
         
-        // Professor só pode ver suas próprias reservas
-        if (usuarioLogado.getPerfil() != Perfil.ADMIN && 
-            !reserva.getProfessor().getId().equals(usuarioLogado.getProfessor().getId())) {
+        if (!temPermissaoParaAcessarReserva(usuarioLogado, reserva)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
         
@@ -82,94 +76,142 @@ public class ReservaController {
     /**
      * Cria uma nova reserva
      */
-    @PostMapping("/criar")  // ou outro path diferente
-    public ResponseEntity<?> criar(@RequestBody ReservaInputDTO input) {
-        Usuario usuarioLogado = getUsuarioLogado();
-        
-        // Se não for admin, só pode fazer reserva para si mesmo
-        if (usuarioLogado.getPerfil() != Perfil.ADMIN) {
-            input.setProfessorId(usuarioLogado.getProfessor().getId());
+    @PostMapping
+    public ResponseEntity<?> criar(@Valid @RequestBody ReservaInputDTO input) {
+        try {
+            logger.info("Criando nova reserva: {}", input);
+            Usuario usuarioLogado = getUsuarioLogado();
+            
+            // Se não for admin, só pode fazer reserva para si mesmo
+            if (usuarioLogado.getPerfil() != Perfil.ADMIN) {
+                input.setProfessorId(usuarioLogado.getProfessor().getId());
+            }
+            
+            // Validar horários
+            if (input.getHoraInicial() != null && input.getHoraFinal() != null) {
+                LocalTime horaInicial = LocalTime.parse(input.getHoraInicial());
+                LocalTime horaFinal = LocalTime.parse(input.getHoraFinal());
+                
+                if (horaInicial.isAfter(horaFinal)) {
+                    logger.error("Horários inválidos: {} > {}", input.getHoraInicial(), input.getHoraFinal());
+                    return ResponseEntity.badRequest()
+                            .body(new ErrorResponse(HttpStatus.BAD_REQUEST.value(), 
+                                 "A hora inicial não pode ser maior que a hora final"));
+                }
+            }
+            
+            ReservaDTO reservaCriada = reservaService.criar(input);
+            logger.info("Reserva criada com sucesso: ID = {}", reservaCriada.getId());
+            return ResponseEntity.status(HttpStatus.CREATED).body(reservaCriada);
+        } catch (Exception e) {
+            logger.error("Erro ao criar reserva: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR.value(), 
+                         "Erro ao criar reserva: " + e.getMessage()));
         }
-        
-        ReservaDTO reservaCriada = reservaService.criar(input);
-        return ResponseEntity.status(HttpStatus.CREATED).body(reservaCriada);
     }
     
     /**
      * Atualiza uma reserva existente (apenas admin)
      */
     @PutMapping("/{id}")
-    public ResponseEntity<ReservaDTO> atualizar(@PathVariable Long id, @RequestBody ReservaInputDTO input) {
-        Usuario usuarioLogado = getUsuarioLogado();
-        
-        // Apenas admins podem editar reservas
-        if (usuarioLogado.getPerfil() != Perfil.ADMIN) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+    public ResponseEntity<?> atualizar(@PathVariable Long id, @RequestBody ReservaInputDTO input) {
+        try {
+            Usuario usuarioLogado = getUsuarioLogado();
+            
+            // Apenas admins podem editar reservas
+            if (usuarioLogado.getPerfil() != Perfil.ADMIN) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            
+            ReservaDTO reservaAtualizada = reservaService.atualizar(id, input);
+            return ResponseEntity.ok(reservaAtualizada);
+        } catch (Exception e) {
+            logger.error("Erro ao atualizar reserva {}: {}", id, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR.value(), 
+                         "Erro ao atualizar reserva: " + e.getMessage()));
         }
-        
-        return ResponseEntity.ok(reservaService.atualizar(id, input));
     }
     
     /**
      * Cancela uma reserva
      */
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> cancelar(@PathVariable Long id) {
-        Usuario usuarioLogado = getUsuarioLogado();
-        ReservaDTO reserva = reservaService.buscarPorId(id);
-        
-        // Apenas admin pode cancelar reservas
-        if (usuarioLogado.getPerfil() != Perfil.ADMIN) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+    public ResponseEntity<?> cancelar(@PathVariable Long id) {
+        try {
+            Usuario usuarioLogado = getUsuarioLogado();
+            
+            // Apenas admin pode cancelar reservas
+            if (usuarioLogado.getPerfil() != Perfil.ADMIN) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            
+            reservaService.cancelar(id);
+            return ResponseEntity.noContent().build();
+        } catch (Exception e) {
+            logger.error("Erro ao cancelar reserva {}: {}", id, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR.value(), 
+                         "Erro ao cancelar reserva: " + e.getMessage()));
         }
-        
-        reservaService.cancelar(id);
-        return ResponseEntity.noContent().build();
     }
     
     /**
      * Confirma a utilização de uma reserva
      */
     @PostMapping("/{id}/confirmar")
-    public ResponseEntity<Void> confirmarUtilizacao(@PathVariable Long id) {
-        Usuario usuarioLogado = getUsuarioLogado();
-        ReservaDTO reserva = reservaService.buscarPorId(id);
-        
-        // Professor só pode confirmar suas próprias reservas
-        if (usuarioLogado.getPerfil() != Perfil.ADMIN && 
-            !reserva.getProfessor().getId().equals(usuarioLogado.getProfessor().getId())) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+    public ResponseEntity<?> confirmarUtilizacao(@PathVariable Long id) {
+        try {
+            Usuario usuarioLogado = getUsuarioLogado();
+            ReservaDTO reserva = reservaService.buscarPorId(id);
+            
+            if (!temPermissaoParaAcessarReserva(usuarioLogado, reserva)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            
+            reservaService.confirmarUtilizacao(id);
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            logger.error("Erro ao confirmar utilização da reserva {}: {}", id, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR.value(), 
+                         "Erro ao confirmar utilização: " + e.getMessage()));
         }
-        
-        reservaService.confirmarUtilizacao(id);
-        return ResponseEntity.ok().build();
     }
     
     /**
      * Verifica disponibilidade para reserva, considerando também o status do espaço
      */
     @PostMapping("/verificar-disponibilidade")
-    public ResponseEntity<Boolean> verificarDisponibilidade(@RequestBody DisponibilidadeDTO dto) {
-        // Primeiro verificar se o espaço está marcado como disponível
-        Optional<EspacoAcademico> espacoOpt = espacoRepository.findById(dto.getEspacoId());
-        
-        if (espacoOpt.isEmpty() || !espacoOpt.get().isDisponivel()) {
-            return ResponseEntity.ok(false); // Espaço não existe ou está indisponível
+    public ResponseEntity<?> verificarDisponibilidade(@RequestBody DisponibilidadeDTO dto) {
+        try {
+            // Primeiro verificar se o espaço está marcado como disponível
+            Optional<EspacoAcademico> espacoOpt = espacoRepository.findById(dto.getEspacoId());
+            
+            if (espacoOpt.isEmpty() || !espacoOpt.get().isDisponivel()) {
+                return ResponseEntity.ok(false); // Espaço não existe ou está indisponível
+            }
+            
+            boolean disponivel = reservaService.verificarDisponibilidade(
+                dto.getData(), 
+                dto.getHoraInicial(), 
+                dto.getHoraFinal(), 
+                dto.getEspacoId(),
+                dto.getReservaId()
+            );
+            
+            return ResponseEntity.ok(disponivel);
+        } catch (Exception e) {
+            logger.error("Erro ao verificar disponibilidade: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR.value(), 
+                         "Erro ao verificar disponibilidade: " + e.getMessage()));
         }
-        
-        boolean disponivel = reservaService.verificarDisponibilidade(
-            dto.getData(), 
-            dto.getHoraInicial(), 
-            dto.getHoraFinal(), 
-            dto.getEspacoId(),
-            dto.getReservaId()
-        );
-        
-        return ResponseEntity.ok(disponivel);
     }
     
     /**
-     * Busca reservas por espaço e data - modificado para incluir apenas reservas não canceladas
+     * Busca reservas por espaço e data - incluindo apenas reservas não canceladas
      */
     @GetMapping("/buscar-por-espaco-data")
     public ResponseEntity<?> buscarPorEspacoEData(
@@ -184,45 +226,14 @@ public class ReservaController {
                 .filter(r -> r.getStatus() != StatusReserva.CANCELADO)
                 .collect(Collectors.toList());
                 
-            return ResponseEntity.ok(reservasAtivas.stream().map(this::toReservaDTO).collect(Collectors.toList()));
+            return ResponseEntity.ok(reservasAtivas.stream()
+                .map(reservaService::toReservaDTO)
+                .collect(Collectors.toList()));
         } catch (Exception e) {
+            logger.error("Erro ao buscar reservas por espaço e data: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR.value(), 
                          "Erro ao buscar reservas: " + e.getMessage()));
-        }
-    }
-    
-    /**
-     * Cria uma nova reserva com validação de horários
-     */
-    @PostMapping
-    public ResponseEntity<?> criarReserva(@Valid @RequestBody ReservaDTO reservaDTO) {
-        try {
-            logger.info("Tentando criar reserva: {}", reservaDTO);
-            
-            // Validar formato e ordem dos horários
-            if (reservaDTO.getHoraInicial() != null && reservaDTO.getHoraFinal() != null) {
-                LocalTime horaInicial = LocalTime.parse(reservaDTO.getHoraInicial());
-                LocalTime horaFinal = LocalTime.parse(reservaDTO.getHoraFinal());
-                
-                if (horaInicial.isAfter(horaFinal)) {
-                    logger.error("Tentativa de criar reserva com horários invertidos: {} > {}", 
-                        reservaDTO.getHoraInicial(), reservaDTO.getHoraFinal());
-                    return ResponseEntity.badRequest().body(
-                        new ErrorResponse(HttpStatus.BAD_REQUEST.value(), 
-                        "A hora inicial não pode ser maior que a hora final"));
-                }
-            }
-            
-            // Chamar o serviço para criar a reserva
-            Reserva reserva = reservaService.criarReserva(reservaDTO);
-            logger.info("Reserva criada com sucesso: ID = {}", reserva.getId());
-            return ResponseEntity.status(HttpStatus.CREATED).body(toReservaDTO(reserva));
-        } catch (Exception e) {
-            logger.error("Erro ao criar reserva: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR.value(), 
-                         "Erro ao criar reserva: " + e.getMessage()));
         }
     }
     
@@ -235,39 +246,10 @@ public class ReservaController {
     }
     
     /**
-     * Método auxiliar para converter Reserva para ReservaDTO
+     * Verifica se o usuário tem permissão para acessar uma reserva específica
      */
-    private ReservaDTO toReservaDTO(Reserva reserva) {
-        ReservaDTO dto = new ReservaDTO();
-        dto.setId(reserva.getId());
-        
-        if (reserva.getEspacoAcademico() != null) {
-            dto.setEspacoAcademico(reserva.getEspacoAcademico());
-            dto.setEspacoAcademicoId(reserva.getEspacoAcademico().getId());
-        }
-        
-        if (reserva.getProfessor() != null) {
-            dto.setProfessor(reserva.getProfessor());
-            dto.setProfessorId(reserva.getProfessor().getId());
-        }
-        
-        dto.setData(reserva.getData());
-        
-        // Converter LocalTime para String
-        if (reserva.getHoraInicial() != null) {
-            dto.setHoraInicial(reserva.getHoraInicial().toString());
-        }
-        
-        if (reserva.getHoraFinal() != null) {
-            dto.setHoraFinal(reserva.getHoraFinal().toString());
-        }
-        
-        dto.setFinalidade(reserva.getFinalidade());
-        dto.setStatus(reserva.getStatus());
-        dto.setDataCriacao(reserva.getDataCriacao());
-        dto.setDataAtualizacao(reserva.getDataAtualizacao());
-        dto.setDataUtilizacao(reserva.getDataUtilizacao());
-        
-        return dto;
+    private boolean temPermissaoParaAcessarReserva(Usuario usuario, ReservaDTO reserva) {
+        return usuario.getPerfil() == Perfil.ADMIN || 
+               reserva.getProfessor().getId().equals(usuario.getProfessor().getId());
     }
 }

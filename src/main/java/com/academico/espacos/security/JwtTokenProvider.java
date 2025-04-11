@@ -7,17 +7,20 @@ import com.academico.espacos.repository.UsuarioRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import io.jsonwebtoken.security.Keys;
 
 import java.util.Date;
+import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 
 @Component
 public class JwtTokenProvider {
 
-    @Value("${app.jwt.secret}")
+    @Value("${jwt.secret}")
     private String jwtSecret;
 
-    @Value("${app.jwt.expiration}")
-    private int jwtExpirationInMs;
+    @Value("${jwt.expiration}")
+    private long jwtExpirationInMs;
 
     @Autowired
     private TokenInvalidadoRepository tokenInvalidadoRepository;
@@ -28,6 +31,7 @@ public class JwtTokenProvider {
     public String gerarToken(Usuario usuario) {
         Date agora = new Date();
         Date dataExpiracao = new Date(agora.getTime() + jwtExpirationInMs);
+        SecretKey key = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
 
         return Jwts.builder()
                 .setSubject(usuario.getId().toString())
@@ -36,16 +40,25 @@ public class JwtTokenProvider {
                 .claim("professorId", usuario.getProfessor() != null ? usuario.getProfessor().getId() : null)
                 .setIssuedAt(agora)
                 .setExpiration(dataExpiracao)
-                .signWith(SignatureAlgorithm.HS512, jwtSecret)
+                .signWith(key)
                 .compact();
     }
 
-    public Long getUserIdFromToken(String token) {
-        Claims claims = Jwts.parser()
-                .setSigningKey(jwtSecret)
+    /**
+     * Extrai as claims do token JWT.
+     * @throws JwtException se o token for inválido
+     */
+    public Claims extractClaims(String token) {
+        SecretKey key = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
+        return Jwts.parserBuilder()
+                .setSigningKey(key)
+                .build()
                 .parseClaimsJws(token)
                 .getBody();
+    }
 
+    public Long getUserIdFromToken(String token) {
+        Claims claims = extractClaims(token);
         return Long.parseLong(claims.getSubject());
     }
 
@@ -56,11 +69,7 @@ public class JwtTokenProvider {
     }
 
     public String getRoleFromToken(String token) {
-        Claims claims = Jwts.parser()
-                .setSigningKey(jwtSecret)
-                .parseClaimsJws(token)
-                .getBody();
-
+        Claims claims = extractClaims(token);
         return claims.get("role", String.class);
     }
 
@@ -68,11 +77,7 @@ public class JwtTokenProvider {
      * Extrai o nome de usuário do token JWT.
      */
     public String getUsernameFromToken(String token) {
-        Claims claims = Jwts.parser()
-                .setSigningKey(jwtSecret)
-                .parseClaimsJws(token)
-                .getBody();
-                
+        Claims claims = extractClaims(token);
         return claims.get("username", String.class);
     }
 
@@ -86,59 +91,15 @@ public class JwtTokenProvider {
                 return false;
             }
             
-            Jwts.parser().setSigningKey(jwtSecret).parseClaimsJws(token);
+            extractClaims(token);
             return true;
-        } catch (SignatureException ex) {
-            // Assinatura inválida
-            return false;
-        } catch (MalformedJwtException ex) {
-            // Token mal formado
-            return false;
-        } catch (ExpiredJwtException ex) {
-            // Token expirado
-            return false;
-        } catch (UnsupportedJwtException ex) {
-            // Token não suportado
-            return false;
-        } catch (IllegalArgumentException ex) {
-            // Claims vazio
-            return false;
-        }
-    }
-
-    public boolean validarToken(String token) {
-        try {
-            // Verificar se o token foi invalidado (logout)
-            if (tokenInvalidadoRepository.findByToken(token).isPresent()) {
-                return false;
-            }
-
-            Jwts.parser().setSigningKey(jwtSecret).parseClaimsJws(token);
-            return true;
-        } catch (SignatureException ex) {
-            // Assinatura inválida
-            return false;
-        } catch (MalformedJwtException ex) {
-            // Token mal formado
-            return false;
-        } catch (ExpiredJwtException ex) {
-            // Token expirado
-            return false;
-        } catch (UnsupportedJwtException ex) {
-            // Token não suportado
-            return false;
-        } catch (IllegalArgumentException ex) {
-            // Claims vazio
+        } catch (JwtException | IllegalArgumentException e) {
             return false;
         }
     }
 
     public Date getExpiracaoToken(String token) {
-        Claims claims = Jwts.parser()
-                .setSigningKey(jwtSecret)
-                .parseClaimsJws(token)
-                .getBody();
-
+        Claims claims = extractClaims(token);
         return claims.getExpiration();
     }
 }

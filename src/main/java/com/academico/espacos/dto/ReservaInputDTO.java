@@ -3,60 +3,36 @@ package com.academico.espacos.dto;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.FutureOrPresent;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class ReservaInputDTO {
+    
+    @NotNull(message = "O ID do espaço acadêmico é obrigatório")
     private Long espacoAcademicoId;
+    
+    @NotNull(message = "O ID do professor é obrigatório")
     private Long professorId;
+    
+    @NotNull(message = "A data da reserva é obrigatória")
+    @FutureOrPresent(message = "A data da reserva deve ser hoje ou uma data futura")
     private LocalDate data;
+    
+    @NotNull(message = "A hora inicial é obrigatória")
     private LocalTime horaInicial;
+    
+    @NotNull(message = "A hora final é obrigatória")
     private LocalTime horaFinal;
+    
+    @NotNull(message = "A finalidade da reserva é obrigatória")
+    @Size(min = 3, max = 255, message = "A finalidade deve ter entre 3 e 255 caracteres")
     private String finalidade;
-
-    // Getters e Setters
-    public Long getEspacoAcademicoId() {
-        return espacoAcademicoId;
-    }
-
-    public void setEspacoAcademicoId(Long espacoAcademicoId) {
-        this.espacoAcademicoId = espacoAcademicoId;
-    }
-
-    public Long getProfessorId() {
-        return professorId;
-    }
-
-    public void setProfessorId(Long professorId) {
-        this.professorId = professorId;
-    }
-
-    public LocalDate getData() {
-        return data;
-    }
-
-    public void setData(LocalDate data) {
-        this.data = data;
-    }
-
-    public LocalTime getHoraInicial() {
-        return horaInicial;
-    }
-
-    public void setHoraInicial(LocalTime horaInicial) {
-        this.horaInicial = horaInicial;
-    }
-
-    public LocalTime getHoraFinal() {
-        return horaFinal;
-    }
-
-    public void setHoraFinal(LocalTime horaFinal) {
-        this.horaFinal = horaFinal;
-    }
-
-    public String getFinalidade() {
-        return finalidade;
-    }
-
-    public void setFinalidade(String finalidade) {
-        this.finalidade = finalidade;
-    }
 }
